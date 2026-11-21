@@ -1,0 +1,84 @@
+<doc>
+  <h1 id="Ys9qQ7sY">bindings.json 应该长什么样</h1>
+  <p id="Tcd90C1J">这是对配置格式的设计选择，还没改代码。请直接在页面上选，或写评论；没选的按我标注的推荐项执行，提交在页面底部。</p>
+  <h2 id="Nutr4sWt">我理解到的</h2>
+  <p id="p0Qz7r_H">现在的文件把「动作」拆成了两层：层里的每个键只存一个 ID，例如 <code>n:36</code>；ID 对应的真正内容放在文件末尾的 <code>actions</code> 表里。你读一个键的时候必须先记住 ID，再翻到底下查内容，读起来不直观。</p>
+  <p id="8tadXkQh">更麻烦的是每次改绑定都会新建一个动作条目，旧条目从不删除。我检查了你当前实际在用的文件：<b>170 条动作里只有 17 条被引用，153 条是没人用的孤儿</b>。唯一被两个键共用的 ID 是 <code>k:lalt:v</code>，而它是按键动作、ID 本身就由内容算出来，不是流水号。也就是说备注、软件、屏蔽这些动作实际上从不复用，却为它们付了整套间接层的成本。</p>
+  <p id="Cgf6EQP_">你提出的方向是：把动作直接写在键的旁边，让人打开文件时一眼看懂。我完全同意这个方向，下面给出三种具体格式。</p>
+  <h2 id="UZ_wf0f1">已定</h2>
+  <ul id="h1Epxn5A">
+    <li>你的要求：格式要让正常人读完就懂，不要跳来跳去。</li>
+    <li>你的要求：给出至少三个方案供选择。</li>
+    <li>已定交互（上一轮展板）：备注与屏蔽合并成「标记 + 放行/屏蔽」；文本显式保存，软件和按键仍然点选即保存。</li>
+    <li>已定行为：改绑定时，键上显示的内容立即换成新的；旧内容不再被读到。</li>
+    <li>我的判断：这次只讨论配置格式，暂不动 UI 和 helper 的其他逻辑。</li>
+  </ul>
+  <h2 id="8hI4rA-y">第 1 轮</h2>
+  <h3 id="kRMhjDV-">1. 配置文件的基本结构（决定后面的问题）</h3>
+  <p id="FWaePBKb"><ask id="schema" recommend="inline"><option value="inline">A · 动作内联到每个键（推荐）</option><option value="flat">B · 扁平绑定列表，层从触发条件派生</option><option value="table">C · 保留 actions 表，但改成具名 ID 并清理孤儿</option></ask></p>
+  <p id="WQl_PsbX">三者的实际文件内容见下面的对照。我的推荐是 A：改动最小，效果最直接，且不改变「层」这个概念。</p>
+  <h4 id="JOp-gTAe">A · 动作内联到每个键（推荐）</h4>
+  <codeblock id="_rQwXX0F" lang="json">{
+  &quot;version&quot;: 3,
+  &quot;items&quot;: [
+    {
+      &quot;kind&quot;: &quot;hold&quot;,
+      &quot;id&quot;: &quot;lctrl&quot;,
+      &quot;title&quot;: &quot;左 Control&quot;,
+      &quot;mods&quot;: [&quot;lctrl&quot;],
+      &quot;keys&quot;: {
+        &quot;t&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;text&quot;: &quot;这个键留给输入法&quot; },
+        &quot;b&quot;: { &quot;type&quot;: &quot;app&quot;, &quot;bundleID&quot;: &quot;com.tencent.wechat&quot; },
+        &quot;v&quot;: { &quot;type&quot;: &quot;key&quot;, &quot;mods&quot;: [&quot;lcmd&quot;], &quot;key&quot;: &quot;v&quot; },
+        &quot;x&quot;: { &quot;type&quot;: &quot;block&quot;, &quot;text&quot;: &quot;不在这里退出&quot; }
+      },
+      &quot;onRelease&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;text&quot;: &quot;只按左 Ctrl&quot; },
+      &quot;onDoubleTap&quot;: { &quot;type&quot;: &quot;app&quot;, &quot;bundleID&quot;: &quot;com.apple.finder&quot; },
+      &quot;window&quot;: 350
+    }
+  ]
+}</codeblock>
+  <p id="EsiFw65W">删掉整个 <code>actions</code> 表和所有 ID。<code>keys.t</code> 直接就是动作本身。改绑定 = 替换这个对象，文件不会变大，也不会有孤儿。帮手读配置时少一次查表。</p>
+  <h4 id="WAokCseN">B · 扁平绑定列表，层从触发条件派生</h4>
+  <codeblock id="XIyZ-GJK" lang="json">{
+  &quot;version&quot;: 3,
+  &quot;bindings&quot;: [
+    { &quot;mods&quot;: [&quot;lctrl&quot;], &quot;key&quot;: &quot;t&quot;, &quot;action&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;text&quot;: &quot;这个键留给输入法&quot; } },
+    { &quot;mods&quot;: [&quot;lctrl&quot;], &quot;key&quot;: &quot;b&quot;, &quot;action&quot;: { &quot;type&quot;: &quot;app&quot;, &quot;bundleID&quot;: &quot;com.tencent.wechat&quot; } },
+    { &quot;mods&quot;: [&quot;lctrl&quot;], &quot;gesture&quot;: &quot;single&quot;, &quot;action&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;text&quot;: &quot;只按左 Ctrl&quot; } },
+    { &quot;mods&quot;: [&quot;lalt&quot;], &quot;key&quot;: &quot;v&quot;, &quot;action&quot;: { &quot;type&quot;: &quot;key&quot;, &quot;mods&quot;: [&quot;lcmd&quot;], &quot;key&quot;: &quot;v&quot; } }
+  ]
+}</codeblock>
+  <p id="Ru8GosLK">配置里不再有「层」，一条记录就是一个触发条件加一个动作；界面和帮手都按修饰键组合分组。概念最少，文件最平，但所有按层操作（排序、分节线、双击窗口）都要重新定义，改动面比 A 大得多。</p>
+  <h4 id="ymngV8Em">C · 保留 actions 表，改成具名 ID 并清理孤儿</h4>
+  <codeblock id="xfWQ6S1K" lang="json">{
+  &quot;version&quot;: 3,
+  &quot;items&quot;: [{ &quot;kind&quot;: &quot;hold&quot;, &quot;id&quot;: &quot;lctrl&quot;, &quot;keys&quot;: { &quot;t&quot;: &quot;note-lctrl-t&quot; } }],
+  &quot;actions&quot;: {
+    &quot;note-lctrl-t&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;text&quot;: &quot;这个键留给输入法&quot; }
+  }
+}</codeblock>
+  <p id="dSVbuxBO">ID 从 <code>n:36</code> 变成 <code>note-lctrl-t</code>，能看出是哪一层的哪个键；每次保存时删掉没人引用的条目。改动最小，但你仍然要跳到文件末尾才能读到内容，而且 ID 本身会过期、会和改名冲突。</p>
+  <h3 id="116c60xm">2. 旧文件怎么过渡</h3>
+  <p id="7D_81415"><ask id="migration" recommend="load"><option value="load">打开时自动转换并写回（推荐）</option><option value="convert">提供一次性的转换命令，手动执行</option><option value="both">新旧格式同时支持，不做转换</option></ask></p>
+  <p id="2PRxZfqK">自动转换的好处是你什么都不用做；打开应用时读旧格式，在内存里换成新结构，下次保存时按新格式写文件。153 条孤儿在转换时自然消失。</p>
+  <h3 id="1c1ympN0">3. 旧文件里的 153 条孤儿</h3>
+  <p id="0kGEdsRM"><ask id="orphans" recommend="drop"><option value="drop">转换时直接丢掉（推荐）</option><option value="keep">先留一份备份文件再丢</option></ask></p>
+  <p id="1JrN8WSA">这些条目没有任何键、单击或双击引用，丢掉不会改变任何行为。备份的好处是万一判断错了还能找回来，代价是目录里多一个文件。</p>
+  <h3 id="k6EMV5W9">4. 将来会不会需要「同一个动作给多个键共用」</h3>
+  <p id="lLK8uzNb"><ask id="share" recommend="copy"><option value="copy">不需要，每个键各存一份（推荐）</option><option value="reuse">需要，保留共享动作的能力</option></ask></p>
+  <p id="qI5Fksjj">你现在的文件里只有一个 ID 被复用，而且是按键动作、内容完全相同。如果以后真要复用，复制一份配置以后各改各的通常更方便；共享会让「改一个键影响另一个键」变成隐性行为。</p>
+  <h2 id="Vkh3UMkY">对照：现在的格式读起来是什么样</h2>
+  <codeblock id="vKi8WWDw" lang="json">{
+  &quot;items&quot;: [
+    { &quot;id&quot;: &quot;lcmd&quot;, &quot;keys&quot;: { &quot;a&quot;: &quot;n:36&quot; } }
+  ],
+  &quot;actions&quot;: {
+    &quot;n:36&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;note&quot;: &quot;...&quot; },
+    &quot;n:37&quot;: { &quot;type&quot;: &quot;note&quot;, &quot;note&quot;: &quot;...&quot; },
+    ...  // 另外 167 条，其中 153 条没人引用
+  }
+}</codeblock>
+  <p id="lWHdh9ya">想知道 Ctrl+A 做什么，要先在 <code>items</code> 里找到 <code>n:36</code>，再到 170 条 <code>actions</code> 里搜索。方案 A 把这两步合成一步。</p>
+</doc>
+

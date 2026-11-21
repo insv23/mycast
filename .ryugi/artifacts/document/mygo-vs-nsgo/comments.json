@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "threads": [
+    {
+      "id": "sDNsNHx5uu",
+      "anchor": {
+        "blockId": "*",
+        "quote": "",
+        "submit": true,
+        "asks": [
+          "framework-choice"
+        ]
+      },
+      "status": "open",
+      "statusAt": "2026-11-20T01:56:43.643Z",
+      "statusBy": "human",
+      "messages": [
+        {
+          "id": "K5BLvtwH8-",
+          "author": "human",
+          "name": "insv",
+          "avatar": "/api/avatar/gravatar/b1a77966f5f315ec692aa213e65e7301a48eda0cc7d54dd4386391652053c760",
+          "text": "Submitted the answers",
+          "at": "2026-11-20T01:56:43.643Z"
+        }
+      ]
+    }
+  ]
+}

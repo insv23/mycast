@@ -1,0 +1,21 @@
+{
+  "name": "mycast",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "mygo dev",
+    "build": "mygo build && bash scripts/sign-app.sh",
+    "generate": "mygo generate",
+    "dev:web": "vite",
+    "build:web": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mygo-runtime": "^0.10.0"
+  },
+  "devDependencies": {
+    "mygo-cli": "^0.10.0",
+    "typescript": "^7",
+    "vite": "^8"
+  }
+}

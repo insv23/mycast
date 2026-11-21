@@ -1,0 +1,274 @@
+<doc>
+  <h1 id="DLQQEDR8">右侧备注 / 屏蔽输入框：根因与消融方案</h1>
+  <p id="Y5PyF64M"><b>结论先行：</b>输入框之所以「点进去 focus 不了、打字叮叮响」，有两处根因。第一处是 CSS 让 WebKit 认为这个 textarea 不可编辑；第二处是每次自动保存都把正在输入的那个 DOM 节点删掉，再用四个补丁伪造焦点。按第一性原理，输入框的焦点根本不需要代码维护——只要没人换掉这个节点。方案是先做 5 步消融，把四个补丁全部删掉，只保留浏览器自己的 focus。</p>
+  <p id="vY4MA4Xt">这是方案，不是实现。确认后我才改代码。</p>
+  <h2 id="4UoIBQb3">一、从第一性原理看，这里要做的事</h2>
+  <p id="0CCAJPMB">目标只有一句：选中一个键或手势后，在右栏写一句短说明；停 450 ms 写进 <code>bindings.json</code>；键帽和「已保存」跟着更新。</p>
+  <p id="dQE41QlV">浏览器里实现这件事的最小机制是：</p>
+  <ol id="lkQzjzcS">
+    <li>页面上始终有<b>同一个</b> <code>textarea</code> 节点。点击它，浏览器自己给焦点和光标。</li>
+    <li><code>input</code> 事件把文字写盘。</li>
+    <li>写盘完成后，只改键帽和徽标这些<b>别处</b>的文字，不碰输入框。</li>
+  </ol>
+  <p id="8o32H4om">推论：任何「把焦点放回去」的代码，都说明有别的代码把节点换掉了。现在这样的代码有四份，它们不是解法，是症状。</p>
+  <h2 id="5IuQ997c">二、根因</h2>
+  <h3 id="ySqIR1d1">1. WebKit 下，继承来的 <code>user-select: none</code> 让输入框不可编辑</h3>
+  <codeblock id="a87r_TZx" lang="css">/* src/style.css:54-55 */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* .field（src/style.css:290 附近）只设了 outline / border，没有覆盖 user-select */</codeblock>
+  <p id="5iVsG6Hy"><code>body</code> 上的值被子元素继承，<code>#tv</code> 和 <code>#q</code> 都拿到了 <code>none</code>。这是 WebKit 的长期行为：<a href="https://bugs.webkit.org/show_bug.cgi?id=82692">WebKit bug 82692 — -webkit-user-select: none makes text fields not editable</a>，WebKit 维护者在讨论里明确表示不打算和 Chrome/Firefox 对齐。实际表现正是「看起来 focus 了、光标可能在闪，但敲字不进去」。</p>
+  <p id="CvjoIL5q">敲进去却没有可编辑对象接收的按键，沿 AppKit 响应链上抛，触发 macOS 的 unsupported key feedback 提示音。Tauri 的 <a href="https://github.com/tauri-apps/tauri/issues/2626">tauri#2626</a> 记录的是同一个声音；该帖确认 JS 侧 <code>preventDefault()</code> 能消音，代价是字符被丢掉。</p>
+  <h3 id="pddWOTEt">2. 每次保存都销毁正在输入的节点</h3>
+  <mermaid id="cvTIXcbJ">flowchart TD
+  T[在 textarea 打字] --&gt; I[input 事件: draft.value = tv.value]
+  I --&gt; D[scheduleWrite: 450ms 定时器]
+  D --&gt; W[queueWrite -&gt; writeGesture]
+  W --&gt; S[Service.setBinding / setOnRelease 写盘]
+  S --&gt; R[refresh -&gt; render]
+  R --&gt; H[renderInsp: insp.innerHTML = html]
+  H --&gt; X[旧 textarea 被销毁]
+  X --&gt; F[focusEditor: 对新节点 focus + rAF 再 focus]
+  F --&gt; T
+  ICON[iconFor 的 Promise 回调] --&gt; R</mermaid>
+  <p id="q-4Yn-vq">写盘后的整页 <code>render()</code> 会重建右栏。图标异步返回时 <code>iconFor()</code> 也调 <code>render()</code>，同样重建右栏——这就是「有时候」的时间窗口来源：保存、图标返回、切换类型三件事可能挤在同一帧。</p>
+  <p id="1_WeJ7vz">重建之后用 <code>focus()</code> 和 <code>setSelectionRange()</code> 是补不回来的。WebKit 的 IME 组合缓冲、undo 栈、原生选区、光标闪烁状态都绑在活节点上；换成新节点再复制 <code>value</code>，状态已经丢了（参见 <a href="https://github.com/anzellai/sky/commit/bdebf7376e43bcbdd61c430844b14d3af72d2a86">sky 的这个修复</a>，结论同样是必须保留节点身份）。<code>focusEditor()</code> 的第二次 <code>focus()</code> 放在 <code>requestAnimationFrame</code> 里，还带着 <code>tv.isConnected</code> 守卫：如果这一帧里又发生一次重建，它检查到节点已离线就静默返回，焦点再也没回来。</p>
+  <h3 id="xNUKXD0L">3. 四份补丁都在处理同一个症状</h3>
+  <table id="iFBwn8R_">
+    <tr>
+      <th>
+        <p>位置</p>
+      </th>
+      <th>
+        <p>做法</p>
+      </th>
+      <th>
+        <p>问题</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.ts:447</code> <code>focusEditor()</code></p>
+      </td>
+      <td>
+        <p>同步 focus 一次，rAF 再 focus 一次</p>
+      </td>
+      <td>
+        <p>承认第一次 focus 会被 WebKit 丢掉；节点被换掉后第二次静默失败</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.ts:780</code> <code>window.addEventListener(&quot;focus&quot;)</code></p>
+      </td>
+      <td>
+        <p>窗口重新激活时抢焦点</p>
+      </td>
+      <td>
+        <p>用户只想再点一下输入框，却被迫接受程序抢焦点</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.ts:828</code> inspector 空白处点击</p>
+      </td>
+      <td>
+        <p>点空白也回到 textarea</p>
+      </td>
+      <td>
+        <p>把「焦点管理」扩散到每个点击分支</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.ts:901</code> 全局 <code>keydown</code> 兜底</p>
+      </td>
+      <td>
+        <p><code>preventDefault()</code> + 强制 focus</p>
+      </td>
+      <td>
+        <p>消掉叮声的代价是丢掉这一个字符；只覆盖无修饰键的按键，中文输入法的组合键、Option 键照旧响</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.ts:287-288</code> 捕获 <code>activeElement</code> / <code>caret</code></p>
+      </td>
+      <td>
+        <p>重建前记下焦点和光标</p>
+      </td>
+      <td>
+        <p>依赖「节点会被重建」这个前提；前提删掉后这一整段没有存在意义</p>
+      </td>
+    </tr>
+  </table>
+  <p id="m6aOfWYQ">四份补丁互相依赖又互相干扰，这正是你觉得「思路错了、focus 应该不难」的原因。它们都在追焦点，没人去删掉那个让焦点丢掉的重建。</p>
+  <h2 id="BBKIr6qt">三、消融实验：逐项删，逐项验</h2>
+  <p id="93KWajeU">每一步只改一个变量，验证通过再删下一项。任一步失败就停在那里，把现象带回来，不叠加新补丁。</p>
+  <steps id="H-e4-Bgx">
+    <step id="s_df08bnk0" title="E0 记录基线">
+      <p>打开右栏，选一个键，点开备注框，连续打 20 个字；停 1 秒再打 10 个；切到屏蔽再切回备注。记录三件事：有没有叮声、丢不丢字、光标会不会跳。这是后续每一步的对照。</p>
+    </step>
+    <step id="s_3p9zpqy8" title="E1 CSS 单行（最小改动）">
+      <p>只加一条规则，其他一律不动：</p>
+      <codeblock lang="css">.field, .search input {
+  -webkit-user-select: text;
+  user-select: text;
+}</codeblock>
+      <p><b>通过信号：</b>点进输入框后能连续输入，叮声消失。若不通过，说明 WebKit 版本行为不同，先停在 E1 报告，继续往 E2 走之前先确认。</p>
+    </step>
+    <step id="s_6hyx4gt1" title="E2 删全局 keydown 兜底">
+      <p>删掉 <code>main.ts:901</code> 之后那段「文本框开着、焦点却不在它身上」的监听器。这是最该先删的补丁：它用丢字符换静音。</p>
+      <p><b>通过信号：</b>不打字不响；打字字符全部落进输入框，叮声不回来。若叮声回来，说明 MyGo 在没有可编辑焦点时仍把按键上抛，那属于另一条问题线，届时讨论框架侧处理，不恢复这个丢字符的兜底。</p>
+    </step>
+    <step id="s_pqvs3rx1" title="E3 删两处抢焦点">
+      <p>删掉 <code>window focus</code> 监听器和 <code>insp</code> 空白处点击的 <code>tv.focus()</code>。切走再回来、点面板空白后，用户再点一次输入框即可。</p>
+      <p><b>通过信号：</b>主动点击总能输入；没有出现「点不进去」的窗口状态。</p>
+    </step>
+    <step id="s_al54geku" title="E4 保存后不再重建 inspector">
+      <p>给 <code>render()</code> 加一道门禁：只有 <code>selKey</code> 或 <code>draft.kind</code> 变化时才调 <code>renderInsp()</code>。保存完成后只调 <code>renderRail()</code>、<code>renderBoard()</code> 和「已保存」徽标；图标返回只调 <code>renderBoard()</code>。输入框节点在打字期间完全不被触碰。</p>
+      <p><b>通过信号：</b>打字中途停 1 秒再继续，字不丢、光标不跳；图标异步加载时输入框不闪。</p>
+    </step>
+    <step id="s_jgr3vtkp" title="E5 删 focusEditor 和 caret 捕获">
+      <p>删掉 <code>focusEditor()</code> 以及 <code>activeElement</code>/<code>selectionStart</code> 的捕获。结构真的变化（选键、切类型）时，新 textarea 创建后只调用一次 <code>focus()</code>——这是唯一一次合法的主动聚焦。</p>
+      <p><b>通过信号：</b>点一个键、切换备注/屏蔽后能直接输入；打字过程中没有任何代码再调用 <code>focus()</code>。</p>
+    </step>
+  </steps>
+  <alert id="zJn4YDu0" type="note">
+    <p><b>刻意保留：</b><code>scheduleWrite</code> / <code>flushWrite</code> / <code>writeChain</code> 不动。Go 侧每次 <code>save()</code> 都重写整个 <code>bindings.json</code>，串行化写入是必要的，且和焦点问题无关。按「实现范围停在你点名的那件事上」，这次不改它。</p>
+  </alert>
+  <h2 id="s3R69J5X">四、改完后的代码形态</h2>
+  <codeblock id="B5CUmSXB" lang="ts">function render() {
+  renderRail();
+  renderBoard();
+  const key = `${sel}|${selKey}|${draft.kind}`;
+  if (key !== inspKey) {
+    inspKey = key;
+    renderInsp();          // textarea 只在这里创建
+  }
+}
+
+// 打字只改数据，不碰 DOM
+tv.addEventListener(&quot;input&quot;, () =&gt; {
+  draft.value = tv.value;
+  scheduleWrite(draft.kind === &quot;note&quot; ? &quot;note&quot; : &quot;block&quot;, tv.value);
+});
+
+// 写盘完成后只更新别处
+await refreshChrome();     // rail + board + 删除按钮
+paintEffect();             // 绑定摘要 + 已保存徽标</codeblock>
+  <p id="8_KpGCd9">四处补丁消失，剩下的 <code>focus()</code> 只在结构变化时调用一次。焦点归浏览器管。</p>
+  <h2 id="r_xL_wZG">五、删除清单与受影响内容</h2>
+  <table id="EYTd_iPT">
+    <tr>
+      <th>
+        <p>文件</p>
+      </th>
+      <th>
+        <p>改动</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/style.css</code></p>
+      </td>
+      <td>
+        <p>增加 <code>.field</code> / <code>.search input</code> 的 <code>user-select: text</code> 覆盖；<code>body</code> 的原有规则保留</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/main.ts</code></p>
+      </td>
+      <td>
+        <p>删 <code>focusEditor()</code>、<code>activeElement</code>/<code>caret</code> 捕获、<code>window focus</code> 监听器、inspector 空白点击聚焦、全局 <code>keydown</code> 兜底；<code>render()</code> 加 inspector 门禁；<code>writeGesture</code> 与 <code>iconFor</code> 改为局部刷新</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>其余文件</p>
+      </td>
+      <td>
+        <p>不动：<code>main.go</code>、<code>service.go</code>、<code>bindings.go</code>、<code>icons.go</code>、<code>server.go</code>、<code>supervisor.go</code>、<code>helper/main.swift</code>、<code>bindings.json</code>、<code>src/mygo.ts</code>、<code>index.html</code></p>
+      </td>
+    </tr>
+  </table>
+  <p id="7GV5lVHV">净效果：<code>src/main.ts</code> 减少约 35–45 行。没有新文件、新依赖、新抽象。</p>
+  <h2 id="vkyo39G7">六、验证 Todo（你自行验证）</h2>
+  <ul id="l3J65eJs" type="check">
+    <li checked="false">打开右栏备注框，连续输入 20 个英文字母：无提示音，20 个字全在，光标在末尾</li>
+    <li checked="false">输入后停 1 秒再打字：字符不丢、光标不跳回开头</li>
+    <li checked="false">用中文输入法连续打一句话：候选词正常上屏，组合过程中输入框不闪、不跳光标</li>
+    <li checked="false">备注 / 屏蔽 / 软件三个分段来回切换：每次新建的输入框都能直接输入</li>
+    <li checked="false">换键、换层、关闭面板再打开：刚才写的说明仍在，键帽文字同步更新</li>
+    <li checked="false">等待应用图标异步加载：输入框不重建，焦点和光标保持</li>
+    <li checked="false">Cmd+Tab 切走再回来：点一次输入框即可打字，没有「点了也没反应」的状态</li>
+    <li checked="false">左栏拖拽排序、双击窗口滑块拖动：行为与改动前一致</li>
+    <li checked="false">全局快捷键（如左 Option + B）照常触发；未绑定的键照常透传给前台应用</li>
+    <li checked="false"><code>bun run typecheck</code> 与 <code>bun run build:web</code> 通过</li>
+  </ul>
+  <h2 id="glRr2tVO">七、边界与需要你确认的点</h2>
+  <p id="W3yf6EhP">1. 我在本会话无法复现原生 WKWebView 的提示音，证据来自代码路径和 WebKit / Tauri 的原始资料。E1 和 E2 是你的确认点；若结果与通过信号不符，我把该步的观察当新证据重查，不继续往下删。</p>
+  <p id="FPprdQJQ">2. 我按「保留现有体验」处理：点一个键后，右栏输入框自动获得焦点。这会用一次 <code>focus()</code>，是全局唯一的一次；如果你希望点键后必须自己再点输入框，告诉我，那次调用也删掉。</p>
+  <p id="QOROx-T7">3. 我的判断是这次改动大概率在 E1 + E4 之后就已经完成，E2/E3/E5 是全局补丁的清理。如果 E1 之后打字和声音都正常，是否继续删到只剩最小机制，由你定；我建议继续，因为留下的补丁会在下一次改动时重新制造同样的疑难问题。</p>
+  <h2 id="int-8otu">八、实施记录</h2>
+  <p id="08j_EQp-">已在 <code>src/style.css</code> 与 <code>src/main.ts</code> 落地 E1–E5 全部改动：删除 <code>focusEditor()</code>、<code>activeElement</code>/<code>caret</code> 捕获、<code>window focus</code> 与 inspector 空白点击两处抢焦点、全局 <code>keydown</code> 兜底；<code>render()</code> 加 inspector 门禁；保存与图标返回改为局部刷新；<code>bindingOf()</code> / <code>effectHTML()</code> 合并了四处重复的绑定查找。</p>
+  <p id="NE2DEIIA"><code>bun run typecheck</code> 已通过。这只能证明 TypeScript 语法与类型正确，<b>不能证明焦点问题已解决</b>。第六节十项仍需你在原生窗口里实测；本会话没有启动原生应用，也没有跑 <code>bun run build:web</code>。</p>
+  <h2 id="vzP-glK0">九、二次排查：假设逐一落空</h2>
+  <p id="gI-wH4pt">第八节的改动在 dev 模式实测后失灵现象照旧，已全部回滚，<code>src/main.ts</code> 与 <code>src/style.css</code> 回到改动前。</p>
+  <table id="IgetVsDs">
+    <tr>
+      <th>
+        <p>验证</p>
+      </th>
+      <th>
+        <p>结果</p>
+      </th>
+      <th>
+        <p>结论</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>CSS 的 user-select 覆盖 + 停止重建输入框</p>
+      </td>
+      <td>
+        <p>仍然偶尔失灵</p>
+      </td>
+      <td>
+        <p>假设落空，已回滚</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Swift helper 的 keyDown/keyUp 一律透传</p>
+      </td>
+      <td>
+        <p>仍然偶尔失灵</p>
+      </td>
+      <td>
+        <p>排除会话级事件 tap，已还原并重建 helper</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>普通浏览器对照</p>
+      </td>
+      <td>
+        <p>页面空白</p>
+      </td>
+      <td>
+        <p><code>mygo-runtime</code> 的 <code>bind</code> 需要 <code>window.mygo</code>，dev 桥不在普通浏览器里</p>
+      </td>
+    </tr>
+  </table>
+  <p id="y6UEqs4W">新增证据：失灵时输入框有红框和光标；软件搜索框与备注框同样失灵；点击和其他交互都正常。据此判断 DOM 焦点存在，问题发生在按键送达 WebKit 之前。</p>
+  <h2 id="o3HoqhQ3">十、拆开三个输入框</h2>
+  <p id="uC9in_Tx">代码确认备注和屏蔽共用同一个 <code>#tv</code> 节点与同一个 <code>draft.value</code>；软件用 <code>#q</code> 与 <code>draft.query</code>；选应用时 bundleID 又写进 <code>draft.value</code>。这是真实的状态串台。</p>
+  <p id="FkX6LWor">已实施：拆成 <code>appQuery</code> / <code>noteValue</code> / <code>blockValue</code> 三个独立状态，备注与屏蔽改用不同 id 和节点；切换类型不再用当前绑定的 note 覆盖目标框；删掉选应用时写入 <code>draft.value</code> 的无用赋值。<code>bun run typecheck</code> 通过。显式提交按钮按你的要求没有做。</p>
+  <p id="2SFWIbs-">这一轮只解决串台。它能否顺带解决失灵尚未验证；按现有证据，搜索框有独立节点也失灵，所以对焦点问题保持怀疑。</p>
+</doc>
+

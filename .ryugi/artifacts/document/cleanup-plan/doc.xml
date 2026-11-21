@@ -1,0 +1,246 @@
+<doc>
+  <h1 id="QfuHY1Vv">清理计划：把「层」从存储里删掉</h1>
+  <p id="lNwA8UXQ">现在这套代码能跑，但有一个抽象会在做键盘 UI 的时候反复跟你打架：<b>「层」被存进了配置</b>。它不只是冗余，它已经跑到不该去的地方了——<code>bindings.json</code> 里躺着两个空层，存在的唯一理由是「以后界面上要画出来」。</p>
+  <p id="pwjx1JYO">这份文档是本轮清理的完整方案，先看结论，再决定要不要动手。</p>
+  <h2 id="q-kOdbTH">一、行业做法核对</h2>
+  <p id="iQiIp8hX">查了四个成熟实现，形状一致：动作独立、绑定扁平、上下文是派生出来的视图。没有一个把「层」当成存储容器。</p>
+  <table id="GIrtS1F-">
+    <tr>
+      <th>
+        <p>工具</p>
+      </th>
+      <th>
+        <p>结构</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>skhd</p>
+      </td>
+      <td>
+        <p><code>lalt - b : open -a Safari</code>，一行一条；左右修饰键词汇是 <code>lalt</code> / <code>ralt</code> / <code>lcmd</code> / <code>rcmd</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Zed keymap.json</p>
+      </td>
+      <td>
+        <p>扁平绑定数组，<code>{&quot;ctrl-right&quot;: &quot;editor::SelectLargerSyntaxNode&quot;}</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>jjui（提案）</p>
+      </td>
+      <td>
+        <p>明确拆成 <code>[[actions]]</code> + <code>[[bindings]]</code>，认为旧扁平键表不够用</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Fresh</p>
+      </td>
+      <td>
+        <p><code>{key, modifiers: [], action, when}</code>，扁平数组</p>
+      </td>
+    </tr>
+  </table>
+  <p id="aC4S77pt">顺带一个直接可用的事实：<code>lalt</code> / <code>ralt</code> / <code>lcmd</code> / <code>rcmd</code> 是区分左右修饰键的通用词汇，比我现在自造的 <code>alt:left</code> 更标准。</p>
+  <h2 id="9t9BRtoh">二、审查发现</h2>
+  <h3 id="EAN9gVlB">1. Layer 一个概念背两种形状（最该删的）</h3>
+  <codeblock id="Uwc8AbRa" lang="go">type Layer struct {
+    Trigger Trigger           // 里面又有 mods / doubleTap 两个互斥字段
+    Action  string            // 形状 A：直接一个动作
+    Keys    map[string]string // 形状 B：一串键
+}</codeblock>
+  <p id="ZvLOQSUi">2×2 种组合，实际只有 2 种有意义。代价已经出现了：<code>main.go</code> 的视图里必须 <code>switch l.Action != &quot;&quot;</code> 特判，Swift 里 <code>layer.keys?[keyName]</code> 和 <code>layer.action</code> 各走一条路。等键盘图出来，每一处「画一个层」都要再写一遍这个特判。</p>
+  <h3 id="Ea8GQd-V">2. 配置里有两个空层，纯粹为了界面占位</h3>
+  <p id="tJFZWzlv"><code>bindings.json</code> 里 <code>ctrl-left</code> 和 <code>cmd-left</code> 的 <code>keys</code> 都是 <code>{}</code>。它们存在只是因为原本想日后在键盘图上画出来。存储层不该承载界面占位——UI 需要空白键位时自己渲染即可。</p>
+  <h3 id="vIk56iAC">3. 双击的「待命层」路径是死代码</h3>
+  <p id="QbwvK6yQ">双击现在就是动作本身，所以「双击后等下一颗键」这条路永远走不到。<code>armedDoubleTap</code>、<code>armedAt</code>、<code>armedLifetime</code>、<code>handleKeyDown</code> 里的 <code>armed</code> 分支，约 20 行加 3 个状态字段，全是历史残留。</p>
+  <h3 id="PBN7sQen">4. 明确的死代码</h3>
+  <table id="qjjHBAF6">
+    <tr>
+      <th>
+        <p>位置</p>
+      </th>
+      <th>
+        <p>什么</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>Go <code>Config.Version</code> / Swift <code>Config.version</code></p>
+      </td>
+      <td>
+        <p>解析但从不使用</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Go <code>bindingCount()</code></p>
+      </td>
+      <td>
+        <p>没有任何调用方</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Go <code>Link.connected()</code></p>
+      </td>
+      <td>
+        <p>没有调用方</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Go <code>Event.PID / Config / TS / Layers / Actions</code></p>
+      </td>
+      <td>
+        <p>只用来拼一句「N 层 / M 动作」</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Swift <code>payload[&quot;raw&quot;]</code></p>
+      </td>
+      <td>
+        <p>Go 侧从不读</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Go <code>configPath()</code> 的 Application Support 回退</p>
+      </td>
+      <td>
+        <p>永远不会命中：没有生成默认配置的逻辑，那个文件不存在</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>mygo.json</code> 的 <code>ios</code> / <code>android</code> 段</p>
+      </td>
+      <td>
+        <p>模板残留，这个工具只跑 macOS</p>
+      </td>
+    </tr>
+  </table>
+  <h3 id="Dv_A4Mj1">5. 两套输出</h3>
+  <p id="gCgDFdlp"><code>debug()</code> 和 <code>report()</code> 各写一次 stderr，内容重复，合并成 <code>report</code> 里调 <code>debug</code>。</p>
+  <h3 id="bzm6yMai">6. 崩溃重启是没有上限的 2 秒循环</h3>
+  <p id="wGOANW-W">权限被撤销时，助手会退出、被拉起、再退出，无限刷日志。改成：短时间内连续失败就停下并报错，等你手动「重启助手」。</p>
+  <h3 id="R017Ab9y">7. Action 的 path 和 bundleID 二选一</h3>
+  <p id="vpwKIPk4">MyGo 的 <code>InstalledApps</code> 在 macOS 上返回的 <code>ID</code> 就是 bundle identifier（没有 bundle id 的应用，<code>ID</code> 就是路径）。所以只存一个 <code>id</code> 字段就够，解析时两种都试，省掉一个字段和一处分支。</p>
+  <h2 id="BXcDEyfN">三、提议的新结构</h2>
+  <codeblock id="bLazs0nv" lang="json">{
+  &quot;actions&quot;: {
+    &quot;safari&quot;:  { &quot;type&quot;: &quot;app&quot;,  &quot;id&quot;: &quot;com.apple.Safari&quot; },
+    &quot;finder&quot;:  { &quot;type&quot;: &quot;app&quot;,  &quot;id&quot;: &quot;com.apple.finder&quot; },
+    &quot;onmyway&quot;: { &quot;type&quot;: &quot;text&quot;, &quot;text&quot;: &quot;在路上了，稍等&quot; },
+    &quot;noop&quot;:    { &quot;type&quot;: &quot;block&quot; }
+  },
+  &quot;bindings&quot;: [
+    { &quot;mods&quot;: [&quot;lalt&quot;],          &quot;key&quot;: &quot;b&quot;, &quot;action&quot;: &quot;safari&quot; },
+    { &quot;mods&quot;: [&quot;lalt&quot;],          &quot;key&quot;: &quot;n&quot;, &quot;action&quot;: &quot;onmyway&quot; },
+    { &quot;mods&quot;: [&quot;ralt&quot;],          &quot;key&quot;: &quot;b&quot;, &quot;action&quot;: &quot;finder&quot; },
+    { &quot;mods&quot;: [&quot;lctrl&quot;, &quot;lalt&quot;], &quot;key&quot;: &quot;b&quot;, &quot;action&quot;: &quot;safari&quot; },
+    { &quot;tap&quot;: &quot;lcmd&quot;,                        &quot;action&quot;: &quot;safari&quot; }
+  ]
+}</codeblock>
+  <p id="rj8yYkA9">三个变化：</p>
+  <ul id="fRHVEXB0">
+    <li><b><code>layers</code> 变成 <code>bindings</code></b>：一条绑定等于一个手势加一个动作。存储里没有「层」这个概念。</li>
+    <li><b>左右必须写明</b>：<code>lalt</code> / <code>ralt</code> / <code>lctrl</code> / <code>rctrl</code> / <code>lcmd</code> / <code>rcmd</code> / <code>lshift</code> / <code>rshift</code>。否则匹配要引入「lalt 也匹配 alt」的包含规则，一处歧义会扩散到界面的每一格。</li>
+    <li><b>动作只存 <code>id</code></b>：显示名和图标由界面从 <code>Shell.InstalledApps()</code> 解析，配置里不存会过期的名字。</li>
+  </ul>
+  <p id="_Rjv7fhn">层在 UI 侧这么派生，不需要存：把 <code>bindings</code> 按 <code>mods</code> 分组就是一层，<code>tap</code> 的那些单独成一组。空层不存在，需要提示时界面自己画。</p>
+  <h2 id="EvwJ7Hxu">四、受影响文件</h2>
+  <table id="BvaqvnJS">
+    <tr>
+      <th>
+        <p>文件</p>
+      </th>
+      <th>
+        <p>改动</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>bindings.go</code></p>
+      </td>
+      <td>
+        <p>删 <code>Layer</code> / <code>Trigger</code>，加 <code>Binding</code>；删 <code>Version</code>、<code>bindingCount</code>、<code>Action.Path</code>；<code>configPath</code> 去掉无效回退</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>server.go</code></p>
+      </td>
+      <td>
+        <p><code>Event</code> 收到最小字段；删 <code>connected()</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>supervisor.go</code></p>
+      </td>
+      <td>
+        <p>重启加上限，连续失败就停</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>main.go</code></p>
+      </td>
+      <td>
+        <p>视图按 <code>mods</code> 分组渲染，删掉 <code>Action != &quot;&quot;</code> 特判；<code>report</code> / <code>debug</code> 合并</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>helper/main.swift</code></p>
+      </td>
+      <td>
+        <p>删 <code>Layer</code> / <code>Trigger</code> / <code>armed*</code> 与 <code>keys</code> 分支；<code>Config</code> 变成 <code>actions</code> + <code>bindings</code>；匹配改为一次查找</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>bindings.json</code></p>
+      </td>
+      <td>
+        <p>换成新结构，删两个空层</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>mygo.json</code></p>
+      </td>
+      <td>
+        <p>删 <code>ios</code> / <code>android</code></p>
+      </td>
+    </tr>
+  </table>
+  <alert id="EyQydS28" type="note">
+    <p>不动的部分：事件 tap 的吞键策略（修饰键永不吞、未命中透传）、孤儿退出、单实例锁、tap 被禁用后的状态重同步、系统双击间隔来源。这些都是验证过有效的，改它没有收益。</p>
+  </alert>
+  <h2 id="Xt8Kjwc-">五、验证清单</h2>
+  <p id="Fp-8Jhr_">改完按这个顺序验，每一步都有明确的失败信号。</p>
+  <ul id="TQHbYUfT" type="check">
+    <li checked="false">重启后状态窗口显示 5 条绑定（不是 4 层），无红色报错</li>
+    <li checked="false">左 Option + B：Safari 从关窗状态变成有窗口</li>
+    <li checked="false">再按左 Option + B：Safari 隐藏</li>
+    <li checked="false">右 Option + B：出 Finder，而不是被左 Option 的层吃掉（验证左右仍然分得开）</li>
+    <li checked="false">左 Ctrl + 左 Option + B：嵌套层仍然命中</li>
+    <li checked="false">双击左 Command：直接触发，不需要再按任何键；连按三下只触发一次</li>
+    <li checked="false">按住左 Option 按 Y（没绑定）：系统照常收到 ⌥Y，没有被吞</li>
+    <li checked="false">改 <code>bindings.json</code> 里某个动作，点「重新加载配置」，立刻生效（不重启）</li>
+    <li checked="false">系统设置里取消辅助功能勾选，助手退出；恢复后点「重启助手」能回来，日志不再无限刷</li>
+  </ul>
+  <h2 id="8hvrODbY">六、两个待定</h2>
+  <p id="FBHxCGqo">这两点定了我就动手，其余按上面的方案执行。</p>
+  <p id="lJBnAV8M"><b>双击后面还要不要接键？</b>按你最新说法，双击本身就是动作，那条路径已经是死的。删掉能少一整套状态。以后想要「双击 ⌘ 进一层，再按 V/C/X」，就得留。<ask id="doubletap-shape" recommend="direct-only"><option value="direct-only">只保留直接触发</option><option value="keep-layer">保留双击进层</option></ask></p>
+  <p id="zQYJXCcX"><b>修饰键支不支持不带左右的写法？</b>我建议不支持：匹配规则少一条歧义，代价是想两边都生效要写两条绑定。<ask id="modifier-sides" recommend="explicit-sides"><option value="explicit-sides">必须写明左右</option><option value="allow-either">支持 alt 表示左右都行</option></ask></p>
+</doc>
+

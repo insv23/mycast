@@ -1,0 +1,7 @@
+/build/
+/.mygo/
+/node_modules/
+/dist/
+/bin/
+/mycast
+mygo_windows_*.syso

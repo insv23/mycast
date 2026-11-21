@@ -1,0 +1,244 @@
+<doc>
+  <h1 id="Wwc2_LIK">新增效果：映射为按键 / 快捷键（方案，未实现）</h1>
+  <p id="E5g-rCIj"><b>结论：</b>在右栏「换成」里加第四项「按键」，中间的大键盘保持原样。配置里只加一种动作 <code>type=key</code>，由 helper 发出一次真实的 keyDown/keyUp。不做按键录制，不做宏，不改配置文件结构。</p>
+  <p id="iUczR77s">这是方案，代码尚未改动。第 6 节的问题可以直接在页面上选；没答的项按我写的推荐执行。界面草图见 <ref html="key-target-picker" to="1hpldmcglPwWmX31xiSmA">按键目标选择器</ref>。</p>
+  <h2 id="F-6sWQv0">1. 从第一性原理看这件事</h2>
+  <p id="r15pL5Mj">mycast 现在只有一条链路：<b>触发</b>（按住一组修饰键 + 一个键，或单击 / 双击这组键）→ <b>一个动作</b>。动作只有三类：打开软件、在键帽上写备注、吃掉按键。要新增的能力只有一句话：<b>让触发发出一组按键，交给前台应用</b>。所以运行时的新机制只有一个——合成并投递按键事件；其余都是把这种动作接进现有链路。</p>
+  <p id="yKHAoVfG">「大写 F」要先还原成事实：键盘事件携带的是物理键位和修饰键标志，字符是当前输入法、键盘布局和 Caps Lock 共同算出来的结果。因此大写 F 的正确表达是 <b>Shift + F</b>，不是往配置里写一个字面量「F」。如果有一天要的是「保证插入字母 F 这个字符」，那是另一种动作（文本插入），不在这次范围内。</p>
+  <p id="bBoeGHHO">发出的组合必须和触发时按住的键无关。比如按住左 Option 再按 V 触发「⌘V」，合成事件上的修饰标志只能是 ⌘，不能把仍然按着的左 Option 带进去；否则前台应用收到的是 ⌥⌘V。</p>
+  <mermaid id="So-dsPgY">flowchart LR
+  T[按住 lalt + V] --&gt; H[helper: 匹配绑定, 吞掉原按键]
+  H --&gt; A[Action type=key, mods=lcmd, key=v]
+  A --&gt; S[合成 keyDown/keyUp, 显式 flags]
+  S --&gt; F[前台应用收到 ⌘V]
+  S -. 同一事件流 .-&gt; H
+  H -. 标记 userData, 直接放行 .-&gt; S</mermaid>
+  <h2 id="yTNR8PAF">2. 消融：先删掉什么</h2>
+  <table id="YSe7_Rop">
+    <tr>
+      <th>
+        <p>候选设计</p>
+      </th>
+      <th>
+        <p>处理</p>
+      </th>
+      <th>
+        <p>理由</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>按键录制：让用户按下想要的组合，界面抓取</p>
+      </td>
+      <td>
+        <p><b>删除</b></p>
+      </td>
+      <td>
+        <p>需要暂停事件 tap、录制状态机、处理重入与权限时序。用户点名的四种形态（⌘V、F、Shift+F、左右 Ctrl）用点选都能表达。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>把中间键盘改成目标键盘，或做触发 / 目标双视图切换</p>
+      </td>
+      <td>
+        <p><b>删除</b></p>
+      </td>
+      <td>
+        <p>中间键盘画的是「我按了什么」；目标组合属于动作，跟软件名、备注文本一样放在右栏。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>新的 Service 方法、新的配置文件、配置版本号升级</p>
+      </td>
+      <td>
+        <p><b>删除</b></p>
+      </td>
+      <td>
+        <p>现有的 <code>setBinding</code> / <code>setOnRelease</code> / <code>setOnDoubleTap</code> 已经能接任何动作；多一个 <code>kind</code> 值即可。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>宏、序列、多步延迟、条件分支</p>
+      </td>
+      <td>
+        <p><b>删除</b></p>
+      </td>
+      <td>
+        <p>需求是一次按键组合，不是脚本。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>解析文本表达式「cmd+v」「F」</p>
+      </td>
+      <td>
+        <p><b>默认删除</b></p>
+      </td>
+      <td>
+        <p>大小写、左右侧、键位名都要定义语法；点选已经无歧义。仅在你选择「直接输入字符」时，才加一个只处理字母大小写的极简解析。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>为大写 F 单独建一种动作</p>
+      </td>
+      <td>
+        <p><b>删除</b></p>
+      </td>
+      <td>
+        <p>它就是一个带 Shift 的 key 动作，和 ⌘V 同一条代码路径。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>合成完整的 modifier 按下 / 抬起序列</p>
+      </td>
+      <td>
+        <p><b>暂不做</b></p>
+      </td>
+      <td>
+        <p>先在 keyDown/keyUp 上写清显式 flags；若真实应用不认，再补 flagsChanged，作为独立的小改动。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Caps Lock、fn、媒体键、非 US 布局、Unicode 字符</p>
+      </td>
+      <td>
+        <p><b>非目标</b></p>
+      </td>
+      <td>
+        <p>现有触发键盘本身就是 ANSI 物理键位；目标键盘沿用同一张表，不引入第二套命名体系。</p>
+      </td>
+    </tr>
+  </table>
+  <p id="gULZQbj5">删完之后剩下的改动很小：一个动作类型、一份表单、一段发送按键的代码、一个防自触发标记。</p>
+  <h2 id="5ME29wT-">3. 方案本体</h2>
+  <h3 id="PnbnDqFH">3.1 数据契约</h3>
+  <codeblock id="EiPp5S02" lang="json">// bindings.json 里的一个动作；这是唯一新增的数据结构
+&quot;k:lcmd+v&quot;: { &quot;type&quot;: &quot;key&quot;, &quot;mods&quot;: [&quot;lcmd&quot;], &quot;key&quot;: &quot;v&quot; },
+&quot;k:lshift+f&quot;: { &quot;type&quot;: &quot;key&quot;, &quot;mods&quot;: [&quot;lshift&quot;], &quot;key&quot;: &quot;f&quot; },
+&quot;k:f&quot;: { &quot;type&quot;: &quot;key&quot;, &quot;key&quot;: &quot;f&quot; }</codeblock>
+  <p id="hUBbKPXU">界面传给 Go 的是规范字符串：<code>mods</code> 按现有顺序排序后用 <code>+</code> 连接，再接 <code>:</code> 和键名，例如 <code>lcmd:v</code>、<code>rctrl:v</code>、<code>lshift:f</code>、<code>f</code>。Go 解析后写入动作，并用同一个字符串做动作 ID，重复保存不会堆积垃圾动作。键名就是现有键位表的 id，helper 已经有了对应的 virtual keycode 表。</p>
+  <p id="yK8MQVsq">左右 Ctrl 沿用现有的 <code>lctrl</code> / <code>rctrl</code> 名字；合成事件时同时写通用标志 <code>maskControl</code> 和设备位 <code>NX_DEVICELCTLKEYMASK</code> / <code>NX_DEVICERCTLKEYMASK</code>。Shift、Option、Command 同理。这一步是区分左右侧的关键，只写通用位做不到。</p>
+  <h3 id="pXBv2Yls">3.2 运行路径</h3>
+  <ol id="_0-or9yp">
+    <li>触发键照旧在 <code>handleKeyDown</code> 里匹配、吞掉；手势照旧在松开时匹配。动作类型新增 <code>key</code> 分支。</li>
+    <li>用目标修饰键构造 flags，发一个 keyDown 和一个 keyUp 到 <code>.cghidEventTap</code>，两个事件都带同一份 flags。</li>
+    <li>给合成事件写一个专用 <code>eventSourceUserData</code> 标记；事件 tap 入口看到这个标记就直接放行，避免合成键再次命中 mycast 自己的绑定。这是两行代码，防止「映射到自身」时递归。</li>
+    <li>原触发键仍然被吞掉；前台应用只会看到目标组合。</li>
+  </ol>
+  <p id="PBNr_pS5">合成事件出现在自己的事件流里，因此标记不可省。业界做法一致：Linear Mouse 对左右修饰位用了同一套通用位 + 设备位；Karabiner 明确指出再注入事件会重新进入 tap，需要过滤；Tinycast 用 <code>eventSourceUserData</code> 给自注入事件打标签。</p>
+  <h3 id="qtdqK6OX">3.3 交互</h3>
+  <p id="ZNsEnpM8">右栏「换成」变成四个按钮：软件 / 备注 / 屏蔽 / 按键。选中「按键」后，面板里是两行左右修饰键芯片（复用新建层弹窗的 <code>modCap</code> 字形）和一张从现有 <code>ROWS</code> 派生的目标键位表。点芯片切换修饰键，点字母选目标键，写盘复用现有的 <code>queueWrite</code>，焦点和自动保存逻辑一行不改。</p>
+  <p id="kAiIkJT_">键帽和效果栏显示紧凑标签：⌘V、⇧F、左 Ctrl + V 用同一个带 L/R 角标的字形；侧栏计数不需要改，因为绑定数量没变。界面细节见 <ref html="key-target-picker" to="1hpldmcglPwWmX31xiSmA">按键目标选择器草图</ref>，草图里的预设按钮只用于解释四种形态。</p>
+  <h2 id="y3B-h9y8">4. 目标与非目标</h2>
+  <ul id="7BPov5IM">
+    <li><b>做：</b>⌘V 一类常见快捷键；单独的 F；Shift+F；指定左右侧的 Ctrl/Option/Shift/Command 组合；普通键位和单击 / 双击手势都能用这个动作。</li>
+    <li><b>做：</b>旧配置原样可读；旧的三类动作不受影响。</li>
+    <li><b>不做：</b>文本插入、宏、媒体键、fn、Caps Lock、非 US 布局字符转换、按应用区分行为、按键录制。</li>
+    <li><b>已知边界：</b>合成的是键位事件，实际字符随输入源变化；日文 / 中文输入法激活时，「⇧F」仍是 Shift + 物理 F 键，不保证产出拉丁字母 F。需要确定字符时用以后的文本动作。</li>
+  </ul>
+  <h2 id="-WvkJOZQ">5. 受影响的内容</h2>
+  <table id="wg-xz0QX">
+    <tr>
+      <th>
+        <p>文件</p>
+      </th>
+      <th>
+        <p>改动</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>helper/main.swift</code></p>
+      </td>
+      <td>
+        <p><code>ActionKind</code> 加 <code>key</code>；<code>Action</code> 加 <code>mods</code> / <code>key</code>；名字到 CGEvents flags 的转换；发送 keyDown/keyUp；tap 入口过滤自注入标记。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>bindings.go</code></p>
+      </td>
+      <td>
+        <p><code>Action</code> 加同名字段；配置迁移保持旧动作不变。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>service.go</code></p>
+      </td>
+      <td>
+        <p><code>newAction</code> 加 <code>key</code> 分支，解析规范字符串并生成固定 ID。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/main.ts</code></p>
+      </td>
+      <td>
+        <p>第四段按钮；目标修饰键与目标键位选择；<code>keyFace</code> 和效果栏显示按键标签；<code>chooseKey</code> 识别新动作类型。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/style.css</code></p>
+      </td>
+      <td>
+        <p>目标键位表的小尺寸样式；复用现有修饰键字形和 <code>.mrow</code>。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/mygo.ts</code></p>
+      </td>
+      <td>
+        <p>由 <code>npm run generate</code> 重新生成 Go 绑定的 TypeScript 类型。</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>不改动</p>
+      </td>
+      <td>
+        <p><code>index.html</code>（字形已齐）、<code>server.go</code>、<code>supervisor.go</code>、<code>icons.go</code>、<code>helper/build.sh</code>。</p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="1bofWBFe">6. 等你确认（第 1 轮）</h2>
+  <ol id="GUhmAPjb">
+    <li><b>目标键怎么指定？</b>（本题决定后面的交互形态） <ask id="target-input" recommend="picker"><option value="picker">点修饰键 + 点键位（推荐）</option><option value="capture">让我按下想要的组合，界面录制</option><option value="expression">输入文本表达式，例如 cmd+v</option></ask>推荐点选：左右侧天然可区分，也不需要暂停事件 tap。录制要多一整套状态机，而且录制时 mycast 自己的层仍在生效。</li>
+    <li><b>大写 F 的语义按 Shift + F 处理？</b> <ask id="uppercase-semantics" recommend="shift-f"><option value="shift-f">是，Shift + 物理 F（推荐）</option><option value="literal">要字面字符 F，由输入法决定键位</option></ask>推荐前者：这就是键盘事件能表达的东西，也和 ⌘V 走同一条路径。字面字符需要文本插入动作，属于另一件事。</li>
+    <li><b>目标组合要保留左右侧吗？</b> <ask id="modifier-sides" recommend="keep-side"><option value="keep-side">保留，左 Ctrl 和右 Ctrl 分开（推荐）</option><option value="generic">不区分，只发通用 Ctrl</option></ask>推荐保留：设备位写进 flags 就能做到，成本很低；你点名要求区分左右 Ctrl。</li>
+    <li><b>合成事件用哪种序列？</b> <ask id="emit-sequence" recommend="flags-only"><option value="flags-only">只在 keyDown/keyUp 写 flags（推荐）</option><option value="full-sequence">先合成修饰键按下，再按键，再抬起修饰键</option></ask>推荐先在按键事件上写显式 flags，代码最少，也能清掉触发键残留的修饰位。完整序列更接近真实键盘，但要维护修饰键状态，留给实测出现问题的应用。</li>
+    <li><b>有没有优先要打通的具体应用或快捷键？</b> <ask id="priority-apps" placeholder="例如：在备忘录里 lalt+v 触发粘贴；在某终端里映射左 Ctrl+V" />用于定验收场景；没有就按通用快捷键验证。</li>
+  </ol>
+  <h2 id="23sAYl_g">7. 验证 Todo（你自行跑）</h2>
+  <p id="TGSCVx0f">这些是实现后再执行的清单，当前没有代码可测。</p>
+  <ul id="I_GggYr4" type="check">
+    <li checked="false">构建：<code>npm run typecheck</code>、<code>go build ./...</code>、<code>bash helper/build.sh</code> 都通过；<code>npm run generate</code> 后 <code>src/mygo.ts</code> 没有意外改动。</li>
+    <li checked="false">回归：现有软件、备注、屏蔽三类动作照常触发、显示、保存。</li>
+    <li checked="false">把一层里的 V 设成 ⌘V，在备忘录里按住该层修饰键按 V，出现粘贴；原 V 不会被输入进去。</li>
+    <li checked="false">把 F 设成单键 F 再改成 Shift+F：在文本框里分别得到 f 和 F。</li>
+    <li checked="false">分别配置左 Ctrl+V 和右 Ctrl+V，用按键事件显示工具确认 flags 里的设备位不同；在能区分左右侧的应用里验证行为。</li>
+    <li checked="false">触发键残留：按住左 Option 触发 ⌘V，粘贴内容里没有 Option 组合出来的字符。</li>
+    <li checked="false">自触发：把目标配成与触发相同的组合（例如 lalt+v → lalt+v），只发出一次，不递归、不卡住。</li>
+    <li checked="false">手势：把「单击」和「双击」也设成按键动作，单击、双击分别只发对应的一次。</li>
+    <li checked="false">切换：同一键从「按键」切到「软件 / 备注 / 屏蔽」再切回来，动作和键帽标签都跟着变；删除后为空。</li>
+    <li checked="false">重启：退出应用与助手后重开，或外部编辑 <code>bindings.json</code> 后触发 reload，动作仍生效。</li>
+  </ul>
+  <h2 id="tQLbbbNs">8. 资料</h2>
+  <ul id="4An8Tmeb">
+    <li><a href="https://developer.apple.com/documentation/coregraphics/cgevent/init(keyboardeventsource:virtualkey:keydown:)">Apple：CGEvent keyboard event 初始化</a> — 按键事件由虚拟键码构造。</li>
+    <li><a href="https://developer.apple.com/documentation/coregraphics/cgevent/flags">Apple：CGEvent.flags</a> — 修饰键标志。</li>
+    <li><a href="https://github.com/linearmouse/linearmouse/blob/main/Modules/KeyKit/Sources/KeyKit/KeySimulator.swift">Linear Mouse KeySimulator</a> — 左右修饰键的通用位 + 设备位写法。</li>
+    <li><a href="https://github.com/pqrs-org/Karabiner-Elements/pull/4414">Karabiner-Elements #4414</a> — 再注入事件会重新进入 event tap，需要过滤。</li>
+    <li><a href="https://github.com/abue-ammar/tinycast/blob/main/Tinycast/Features/HotKeys/Service/HyperKeyTap.swift">Tinycast HyperKeyTap</a> — 用 eventSourceUserData 标记自注入按键的实例。</li>
+    <li><a href="https://stackoverflow.com/questions/18408565/map-nsevent-keycode-to-virtual-key-code">虚拟键码与字符的区别</a> — 键位与输入源解耦。</li>
+  </ul>
+</doc>
+

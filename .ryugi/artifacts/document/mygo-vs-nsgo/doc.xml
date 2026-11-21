@@ -1,0 +1,302 @@
+<doc>
+  <h1 id="GdgTaPOJ">MyGo 与 NSGo：性能数据，以及它对你的启动器意味着什么</h1>
+  <p id="s280l5QI">先说结论：<b>对一个常驻后台、靠全局快捷键唤出的启动器，这两个框架的性能差距与你的决策无关，它们缺的是同一块能力。</b>两边的数字都在「小应用、内存几十 MB」的量级，差 7 MB 或 100 ms 不会改变你用起来的感觉。真正决定成败的是系统级键盘：左右修饰键、双击修饰键、劫持别家应用的组合键。这一块两个框架都给不了。</p>
+  <p id="EJtXgzRf">数据来自 NSGo 官方的对比页（<a href="https://nsgo.dev/zh/benchmarks/">nsgo.dev/zh/benchmarks</a>），它用三个相同的应用在 macOS、Windows、Linux 上测了五个框架。这里只取 MyGo 和 NSGo 两列。</p>
+  <h2 id="gvgo4y9O">测的是什么</h2>
+  <table id="v6Vd2yYs">
+    <tr>
+      <th>
+        <p>用例</p>
+      </th>
+      <th>
+        <p>内容</p>
+      </th>
+      <th>
+        <p>量的指标</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>计数器</p>
+      </td>
+      <td>
+        <p>一个数字、两个按钮，打开后保持空闲</p>
+      </td>
+      <td>
+        <p>启动时间、常驻内存、二进制体积</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>实时行情</p>
+      </td>
+      <td>
+        <p>40 行表格，每个显示帧更新其中 10 行</p>
+      </td>
+      <td>
+        <p>CPU、内存、帧率</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>滚动列表</p>
+      </td>
+      <td>
+        <p>10,000 行，每个显示帧向下滚动一行</p>
+      </td>
+      <td>
+        <p>CPU、内存、帧率</p>
+      </td>
+    </tr>
+  </table>
+  <p id="AdwesD_h">启动时间是二进制启动到第一帧，内存取运行结束时的物理占用（Linux 为 PSS），CPU 在稳定 3 秒后测 10 秒，五个应用轮流跑，并扣掉合成器自身的占用。构建都是发布模式。</p>
+  <h2 id="zKfrYw0Q">空闲的启动器最像「计数器」</h2>
+  <p id="ALu8_KKI">你的 mycast 大部分时间没有窗口、只在后台等一个按键，所以第一组数据最相关。</p>
+  <chart id="XtkFy9gu"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "启动时间",
+    "subtitle": "计数器，越低越好",
+    "x": "platform",
+    "series": [{"key": "nsgo", "label": "NSGo"}, {"key": "mygo", "label": "MyGo"}],
+    "data": [
+      {"platform": "macOS", "nsgo": 285, "mygo": 397},
+      {"platform": "Windows", "nsgo": 161, "mygo": 165},
+      {"platform": "Linux", "nsgo": 81, "mygo": 98}
+    ],
+    "format": {"unit": "ms", "decimals": 0},
+    "source": "nsgo.dev/zh/benchmarks"
+  }]]></chart>
+  <chart id="5QrbbkF7"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "常驻内存",
+    "subtitle": "计数器，越低越好",
+    "x": "platform",
+    "series": [{"key": "nsgo", "label": "NSGo"}, {"key": "mygo", "label": "MyGo"}],
+    "data": [
+      {"platform": "macOS", "nsgo": 24.9, "mygo": 31.9},
+      {"platform": "Windows", "nsgo": 59.2, "mygo": 62.7},
+      {"platform": "Linux", "nsgo": 47.6, "mygo": 70.5}
+    ],
+    "format": {"unit": "MB", "decimals": 1},
+    "highlight": "nsgo",
+    "source": "nsgo.dev/zh/benchmarks"
+  }]]></chart>
+  <chart id="Bxf8qQNC"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "二进制体积",
+    "subtitle": "计数器，越低越好",
+    "x": "platform",
+    "series": [{"key": "nsgo", "label": "NSGo"}, {"key": "mygo", "label": "MyGo"}],
+    "data": [
+      {"platform": "macOS", "nsgo": 7.9, "mygo": 10.2},
+      {"platform": "Windows", "nsgo": 8.4, "mygo": 11.0},
+      {"platform": "Linux", "nsgo": 7.9, "mygo": 10.5}
+    ],
+    "format": {"unit": "MB", "decimals": 1},
+    "source": "nsgo.dev/zh/benchmarks"
+  }]]></chart>
+  <p id="7YLMAw7J">NSGo 在这三项上都赢，差距最大的是 Linux 内存（47.6 对 70.5 MB，省 32%）。macOS 上省 7 MB。作为参照，一个空的 Chrome 标签页也要几十 MB。这些差距是真的，但对一个只有你自己用的工具来说，省下 7 MB 不影响任何体验。</p>
+  <h2 id="VVIZSItN">每帧都要更新的场景会翻转</h2>
+  <p id="fRh94jbY">第二组数据值得单独看，因为它和第一组的结论相反。</p>
+  <chart id="e1GJnzEC"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "CPU · 实时行情",
+    "subtitle": "每帧更新 10 行，越低越好",
+    "x": "platform",
+    "series": [{"key": "nsgo", "label": "NSGo"}, {"key": "mygo", "label": "MyGo"}],
+    "data": [
+      {"platform": "macOS", "nsgo": 75.8, "mygo": 66.6},
+      {"platform": "Windows", "nsgo": 175.6, "mygo": 127.2},
+      {"platform": "Linux", "nsgo": 24.0, "mygo": 15.6}
+    ],
+    "format": {"unit": "%", "decimals": 1},
+    "note": "以单核为 100%。原生视图把绘制交给系统合成器，GPU 渲染在应用自己的进程里画，所以每条都把合成器的 CPU 加在应用的之上。",
+    "source": "nsgo.dev/zh/benchmarks"
+  }]]></chart>
+  <chart id="pCiM3cWj"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "内存 · 实时行情",
+    "subtitle": "越低越好",
+    "x": "platform",
+    "series": [{"key": "nsgo", "label": "NSGo"}, {"key": "mygo", "label": "MyGo"}],
+    "data": [
+      {"platform": "macOS", "nsgo": 47.9, "mygo": 84.6},
+      {"platform": "Windows", "nsgo": 76.2, "mygo": 87.8},
+      {"platform": "Linux", "nsgo": 61.1, "mygo": 93.3}
+    ],
+    "format": {"unit": "MB", "decimals": 1},
+    "source": "nsgo.dev/zh/benchmarks"
+  }]]></chart>
+  <p id="R3_w8OWt">MyGo 的 CPU 在三个平台都更低，内存都更高。原因是它的模型：每帧从 view 函数重建整棵树，改动越多，重建越频繁，临时分配也越多。NSGo 把变更交给原生视图，只更新读到的部分。</p>
+  <p id="VrBTn8rm">OS 侧的参照：三个用例的帧率两边都跑满刷新率（macOS 120、Windows 260、Linux 60），所以差别只在成本，不在流畅度。</p>
+  <h2 id="Y0rYp-Wk">两个框架的取舍在哪</h2>
+  <table id="LodnVJ8e">
+    <tr>
+      <th>
+        <p>维度</p>
+      </th>
+      <th>
+        <p>MyGo</p>
+      </th>
+      <th>
+        <p>NSGo</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>绘制</p>
+      </td>
+      <td>
+        <p>自绘 GPU，或系统 webview；每帧从 view 函数重建</p>
+      </td>
+      <td>
+        <p>各平台原生视图，signals 细粒度更新</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>语言</p>
+      </td>
+      <td>
+        <p>Go，可选 TypeScript 前端</p>
+      </td>
+      <td>
+        <p>Go，可选 TSX（goja 解释执行）</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>目标平台</p>
+      </td>
+      <td>
+        <p>macOS、Windows、Linux、Web</p>
+      </td>
+      <td>
+        <p>iOS、Android、macOS、Windows、Linux、Web、tvOS、watchOS，小程序试验性</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>跨平台一致性</p>
+      </td>
+      <td>
+        <p>自绘所以每个平台长得一样</p>
+      </td>
+      <td>
+        <p>原生视图所以各平台有细微差别，要逐个检查</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>成熟度</p>
+      </td>
+      <td>
+        <p>文档成体系，API 已稳定使用</p>
+      </td>
+      <td>
+        <p>0.1.0，官方明写「API 不稳定，先读源码」</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>桌面能力</p>
+      </td>
+      <td>
+        <p>面板、托盘、全局快捷键、剪贴板、已装应用列表、签名分发</p>
+      </td>
+      <td>
+        <p>面板、托盘、全局快捷键、剪贴板、系统服务、签名分发</p>
+      </td>
+    </tr>
+  </table>
+  <p id="uqF47NbF">桌面能力这一行两边几乎对齐。NSGo 缺的是 MyGo 那边已经写好文档的 <code>Shell.InstalledApps</code>（列出已安装应用和图标），但要自己实现也不算难。</p>
+  <h2 id="-TJhmH0b">关键：这一块两个都没有</h2>
+  <p id="UhHUM9x-">你要的触发层，逐条核对两边的 API 之后是这样的：</p>
+  <table id="B_MJR2dc">
+    <tr>
+      <th>
+        <p>需要的能力</p>
+      </th>
+      <th>
+        <p>MyGo</p>
+      </th>
+      <th>
+        <p>NSGo</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>注册一个全局组合键</p>
+      </td>
+      <td>
+        <p>有，<code>GlobalShortcut.Register</code></p>
+      </td>
+      <td>
+        <p>有，<code>desktop.RegisterHotKey</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>区分左右修饰键</p>
+      </td>
+      <td>
+        <p>没有。窗口内的 <code>InputEvent.Code</code> 能分左右，但只在窗口有焦点时；全局热键语法只有 <code>Ctrl</code>/<code>Alt</code>/<code>Cmd</code></p>
+      </td>
+      <td>
+        <p>没有。<code>KeyEvent.Shortcut</code> 输出 <code>ctrl+shift+k</code> 这种字符串，副作用键不分边</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>双击修饰键</p>
+      </td>
+      <td>
+        <p>没有。窗口内可以自己判状态机</p>
+      </td>
+      <td>
+        <p>没有。同上</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>看见别家应用的按键</p>
+      </td>
+      <td>
+        <p>没有。没有全局键盘事件流</p>
+      </td>
+      <td>
+        <p>没有。<code>RegisterHotKey</code> 只接受组合，没有事件流</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>劫持系统默认快捷键（⌘Q、⌘S）</p>
+      </td>
+      <td>
+        <p>做不到</p>
+      </td>
+      <td>
+        <p>做不到</p>
+      </td>
+    </tr>
+  </table>
+  <alert id="P5N6kkUP" type="warning">
+    <p>也就是说，<b>无论选哪个框架，都得写一个独立的 CGEventTap 小进程</b>来做触发层：用 Swift 或 cgo 拿底层键码，分清左右，自己判双击，把事件通过 Unix domain socket 交给主进程。前面几轮讨论的方案 A 与框架选择无关。</p>
+  </alert>
+  <mermaid id="A2Bredju">flowchart LR
+  keys[&quot;系统按键&quot;] --&gt; tap[&quot;CGEventTap 进程&lt;br/&gt;左右修饰键 / 双击 / 劫持&quot;]
+  tap --&gt;|&quot;命中绑定&quot;| app[&quot;mycast 主进程&lt;br/&gt;面板 / 剪贴板 / 搜索 / 计算器&quot;]
+  tap --&gt;|&quot;未命中&quot;| passthrough[&quot;原样放行给当前应用&quot;]
+  app --&gt; panel[&quot;面板&quot;]</mermaid>
+  <p id="A8EJ_4C0">这个结构下，主进程只负责 UI 和业务，性能更不是瓶颈：面板弹出时才有一次绘制，热路径（拦截判断）在那个 Swift 进程里。</p>
+  <h2 id="9cGdb1Fk">我的建议</h2>
+  <p id="hocB0Hxe"><b>继续用 MyGo。</b>理由不在性能表上：你已经照它的文档把面板、全局热键、剪贴板、左右修饰键语义都摸过一遍，它的 launch 文档几乎是为你这个需求写的；NSGo 自己标着 0.1.0 和「API 不稳定」，而你的启动器不需要手机端——那才是 NSGo 真正值钱的地方。</p>
+  <p id="mLz8hHsV">如果哪天这个工具要上 iOS 或者要给团队分发给非 Mac 用户，再回头看 NSGo，那时候它的 API 大概也稳了。</p>
+  <p id="Vn4q_PVu"><ask id="framework-choice" recommend="mygo"><option value="mygo">继续用 MyGo</option><option value="nsgo">换成 NSGo</option><option value="prototype">先用两边各写一个面板原型再定</option></ask></p>
+</doc>
+

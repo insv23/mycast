@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyCast</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div class="win">
+      <div class="dragtop"></div>
+      <div class="body">
+        <aside class="rail" id="rail"></aside>
+        <main class="board" id="board"></main>
+        <aside class="insp" id="insp"></aside>
+      </div>
+    </div>
+    <svg style="display:none" aria-hidden="true">
+      <symbol id="g-ctrl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9998 15C17.9998 15 13.5809 9.00001 11.9998 9C10.4187 8.99999 5.99985 15 5.99985 15"/></symbol>
+      <symbol id="g-alt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 5H5.04362C6.96246 5 7.92187 5 8.67328 5.49548C9.42469 5.99095 9.80263 6.8728 10.5585 8.63648L13.4415 15.3635C14.1974 17.1272 14.5753 18.009 15.3267 18.5045C16.0781 19 17.0375 19 18.9564 19H20"/><path d="M14 5H20"/></symbol>
+      <symbol id="g-cmd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M15 9V15H9V9H15Z"/><path d="M15 15H18C19.6569 15 21 16.3431 21 18C21 19.6569 19.6569 21 18 21C16.3431 21 15 19.6569 15 18V15Z"/><path d="M9 15.002H6C4.34315 15.002 3 16.3451 3 18.002C3 19.6588 4.34315 21.002 6 21.002C7.65685 21.002 9 19.6588 9 18.002V15.002Z"/><path d="M15 9L15 6C15 4.34315 16.3431 3 18 3C19.6569 3 21 4.34315 21 6C21 7.65685 19.6569 9 18 9H15Z"/><path d="M9 9V6C9 4.34315 7.65685 3 6 3C4.34315 3 3 4.34315 3 6C3 7.65685 4.34315 9 6 9H9Z"/></symbol>
+      <symbol id="g-shift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H15"/><path d="M14.9351 5.27643L17.3928 7.99539C19.335 10.1441 20.3061 11.2184 19.9143 12.1092C19.5225 13 18.0788 13 15.1915 13H15V14C15 15.4142 15 16.1213 14.5607 16.5607C14.1213 17 13.4142 17 12 17C10.5858 17 9.87868 17 9.43934 16.5607C9 16.1213 9 15.4142 9 14V13H8.80852C5.92117 13 4.47749 13 4.08568 12.1092C3.69387 11.2184 4.66499 10.1441 6.60724 7.99538L9.06495 5.27642C10.4367 3.75881 11.1226 3 12 3C12.8774 3 13.5633 3.75881 14.9351 5.27643Z"/></symbol>
+      <symbol id="g-tap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.2" y="3.2" width="11" height="11" rx="3"/><rect x="9.8" y="9.8" width="11" height="11" rx="3"/></symbol>
+      <symbol id="g-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z"/><path d="M19 5L5 19"/></symbol>
+      <symbol id="g-dash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 12h18"/></symbol>
+      <symbol id="g-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+    </svg>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
