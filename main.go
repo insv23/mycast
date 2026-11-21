@@ -133,6 +133,7 @@ func (a *app) showWindow() {
 	if a.win == nil {
 		return
 	}
+	mygo.App.Dock.Show()
 	a.win.Show()
 	a.win.Focus()
 }
@@ -220,6 +221,8 @@ func main() {
 			}
 			e.PreventDefault()
 			a.win.Hide()
+			// 进程和助手仍在菜单栏运行，窗口藏起后不再占 Dock 图标。
+			mygo.App.Dock.Hide()
 		})
 		a.makeTray()
 
