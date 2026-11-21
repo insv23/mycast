@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,11 +14,15 @@ import (
 	"github.com/egoist/mygo"
 )
 
+//go:embed resources/tray.png
+var trayIcon []byte
+
 type app struct {
 	cfgPath string
 
 	// The helper's side of the world, written from its goroutine.
 	mu        sync.Mutex
+	quitting  bool
 	helperOK  bool
 	axOK      bool
 	helperMsg string
@@ -27,6 +32,7 @@ type app struct {
 	icons  *icons
 
 	win  *mygo.Window
+	tray *mygo.Tray
 	link *Link
 	sup  *Supervisor
 }
@@ -123,6 +129,34 @@ func clock() string {
 	return time.Now().Format("15:04:05")
 }
 
+func (a *app) showWindow() {
+	if a.win == nil {
+		return
+	}
+	a.win.Show()
+	a.win.Focus()
+}
+
+func (a *app) makeTray() {
+	menu := mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "打开 MyCast", Click: func(*mygo.MenuItem, *mygo.Window) { a.showWindow() }},
+		mygo.Separator(),
+		{Role: mygo.RoleQuit},
+	})
+	tray, err := mygo.NewTray(mygo.TrayOptions{
+		ID:             "mycast",
+		Icon:           trayIcon,
+		IconIsTemplate: true,
+		ToolTip:        "MyCast",
+		Menu:           menu,
+	})
+	if err != nil {
+		log.Printf("tray: %v", err)
+		return
+	}
+	a.tray = tray
+}
+
 // modsTitle names a layer the way the sidebar shows it.
 func modsTitle(mods []string) string {
 	names := map[string]string{
@@ -161,10 +195,7 @@ func main() {
 		return
 	}
 	mygo.App.OnSecondInstance(func([]string, string) {
-		if a.win != nil {
-			a.win.Show()
-			a.win.Focus()
-		}
+		a.showWindow()
 	})
 
 	mygo.App.WhenReady(func() {
@@ -179,6 +210,18 @@ func main() {
 			BackgroundColor: "light-dark(#f6f6f8, #1a1a1c)",
 			URL:             "/",
 		})
+		// 关窗只隐藏窗口；助手继续监听，映射保持生效。退出走菜单栏。
+		a.win.OnClose(func(e *mygo.CloseEvent) {
+			a.mu.Lock()
+			quitting := a.quitting
+			a.mu.Unlock()
+			if quitting {
+				return
+			}
+			e.PreventDefault()
+			a.win.Hide()
+		})
+		a.makeTray()
 
 		sock := socketPath()
 		a.link = newLink(sock)
@@ -209,9 +252,17 @@ func main() {
 	})
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		a.mu.Lock()
+		a.quitting = true
+		a.mu.Unlock()
 		if a.sup != nil {
 			a.sup.stop()
 		}
+	})
+	mygo.App.OnQuitCanceled(func() {
+		a.mu.Lock()
+		a.quitting = false
+		a.mu.Unlock()
 	})
 
 	if err := mygo.App.Run(); err != nil {
