@@ -31,10 +31,15 @@ type app struct {
 	config *Config
 	icons  *icons
 
-	win  *mygo.Window
-	tray *mygo.Tray
-	link *Link
-	sup  *Supervisor
+	win      *mygo.Window
+	launcher *mygo.Window
+	tray     *mygo.Tray
+	link     *Link
+	sup      *Supervisor
+
+	commands *Registry
+	cmdMu    sync.Mutex
+	cmdWins  map[string]*mygo.Window
 }
 
 func (a *app) item(id string) (Item, bool) {
@@ -129,18 +134,85 @@ func clock() string {
 	return time.Now().Format("15:04:05")
 }
 
-func (a *app) showWindow() {
-	if a.win == nil {
+func (a *app) showLauncher() {
+	if a.launcher == nil {
 		return
 	}
-	mygo.App.Dock.Show()
-	a.win.Show()
-	a.win.Focus()
+	a.launcher.Show()
+	a.launcher.Focus()
+	a.syncDock()
+}
+
+func (a *app) hideLauncher() {
+	if a.launcher != nil {
+		a.launcher.Hide()
+	}
+	a.syncDock()
+}
+
+func (a *app) syncDock() {
+	visible := a.launcher != nil && a.launcher.IsVisible()
+	a.cmdMu.Lock()
+	for _, win := range a.cmdWins {
+		if win != nil && !win.IsDestroyed() && win.IsVisible() {
+			visible = true
+		}
+	}
+	a.cmdMu.Unlock()
+	if visible {
+		mygo.App.Dock.Show()
+	} else {
+		mygo.App.Dock.Hide()
+	}
+}
+
+func (a *app) openCommandWindow(id string) {
+	a.cmdMu.Lock()
+	if win := a.cmdWins[id]; win != nil && !win.IsDestroyed() {
+		a.cmdMu.Unlock()
+		win.Show()
+		win.Focus()
+		a.syncDock()
+		return
+	}
+	a.cmdMu.Unlock()
+
+	opts := mygo.WindowOptions{
+		Title:             "MyCast",
+		URL:               "/" + id,
+		HideWindowButtons: true,
+		Width:           1236,
+		Height:          650,
+		MinWidth:        900,
+		MinHeight:       560,
+		StateKey:        "command-" + id,
+		TitleBarStyle:   mygo.TitleBarHiddenInset,
+		BackgroundColor: "light-dark(#f6f6f8, #1a1a1c)",
+	}
+	if id == "keyboard-mapping" {
+		opts.Title = "键盘映射"
+		opts.URL = "/keyboard"
+	}
+	win := mygo.NewWindow(opts)
+	a.cmdMu.Lock()
+	a.cmdWins[id] = win
+	a.cmdMu.Unlock()
+	win.OnClosed(func() {
+		a.cmdMu.Lock()
+		if a.cmdWins[id] == win {
+			delete(a.cmdWins, id)
+		}
+		a.cmdMu.Unlock()
+		a.syncDock()
+	})
+	win.Show()
+	win.Focus()
+	a.syncDock()
 }
 
 func (a *app) makeTray() {
 	menu := mygo.NewMenu([]*mygo.MenuItem{
-		{Label: "打开 MyCast", Click: func(*mygo.MenuItem, *mygo.Window) { a.showWindow() }},
+		{Label: "打开 MyCast", Click: func(*mygo.MenuItem, *mygo.Window) { a.showLauncher() }},
 		mygo.Separator(),
 		{Role: mygo.RoleQuit},
 	})
@@ -188,6 +260,17 @@ func main() {
 		icons:   newIcons(),
 	}
 	a.reload()
+	a.commands = newRegistry()
+	a.cmdWins = map[string]*mygo.Window{}
+	a.commands.Register(Command{
+		ID:       "keyboard-mapping",
+		Title:    "打开键盘映射",
+		Subtitle: "MyCast",
+		Type:     "Command",
+		Shortcut: "⌥⇧K",
+		Keywords: []string{"键盘", "映射", "keyboard", "keymap"},
+		Run:      func() { a.openCommandWindow("keyboard-mapping") },
+	})
 	mygo.Bind(Service{a: a})
 
 	// Two copies would each start a helper, and two event taps fight over the
@@ -196,23 +279,23 @@ func main() {
 		return
 	}
 	mygo.App.OnSecondInstance(func([]string, string) {
-		a.showWindow()
+		a.showLauncher()
 	})
 
 	mygo.App.WhenReady(func() {
-		a.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:           "MyCast",
-			Width:           1236,
-			Height:          650,
-			MinWidth:        1236,
-			MinHeight:       650,
-			StateKey:        "main",
-			TitleBarStyle:   mygo.TitleBarHiddenInset,
-			BackgroundColor: "light-dark(#f6f6f8, #1a1a1c)",
-			URL:             "/",
+		a.launcher = mygo.NewWindow(mygo.WindowOptions{
+			Title:             "MyCast",
+			Width:             720,
+			Height:            440,
+			DisableResize:     true,
+			HideWindowButtons: true,
+			StateKey:          "launcher-compact-v2",
+			TitleBarStyle:     mygo.TitleBarHiddenInset,
+			BackgroundColor:   "light-dark(#ebebeb, #1a1a1c)",
+			URL:               "/launcher",
 		})
 		// 关窗只隐藏窗口；助手继续监听，映射保持生效。退出走菜单栏。
-		a.win.OnClose(func(e *mygo.CloseEvent) {
+		a.launcher.OnClose(func(e *mygo.CloseEvent) {
 			a.mu.Lock()
 			quitting := a.quitting
 			a.mu.Unlock()
@@ -220,11 +303,19 @@ func main() {
 				return
 			}
 			e.PreventDefault()
-			a.win.Hide()
-			// 进程和助手仍在菜单栏运行，窗口藏起后不再占 Dock 图标。
-			mygo.App.Dock.Hide()
+			a.hideLauncher()
 		})
 		a.makeTray()
+
+		if err := mygo.GlobalShortcut.Register("Ctrl+Option+Space", func() {
+			if a.launcher.IsVisible() {
+				a.hideLauncher()
+			} else {
+				a.showLauncher()
+			}
+		}); err != nil {
+			log.Printf("shortcut: %v", err)
+		}
 
 		sock := socketPath()
 		a.link = newLink(sock)
@@ -255,6 +346,7 @@ func main() {
 	})
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		mygo.GlobalShortcut.Unregister("Ctrl+Option+Space")
 		a.mu.Lock()
 		a.quitting = true
 		a.mu.Unlock()

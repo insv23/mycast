@@ -1,0 +1,170 @@
+<doc>
+  <h1 id="orHh7Eky">MyCast 启动器 UI/UX 设计</h1>
+  <p id="Qdj4GWu4">这是三轮画板选择的定稿，供你批准。读完在文档里回复即可；批准前不写产品代码。</p>
+  <h2 id="hY6RByST">意图</h2>
+  <p id="hOiZv3pb">你希望 MyCast 的一切入口都是 Raycast 式搜索窗口：搜索应用回车直接打开应用，搜索功能回车打开该功能自己的窗口。它与 Raycast 的关键区别是，键盘映射、剪贴板、片段、插件等功能各自拥有独立窗口，可以同时留在屏幕上，并各自在键盘映射里绑定快捷键。视觉风格以你给的参考图为准，争取一比一复刻。</p>
+  <p id="HotPj5Ba">这次只定 UI 和 UX 交互。插件系统要暴露什么 API、moe.js 如何兼容，留给下一份设计。</p>
+  <h2 id="J2VUmi1S">目标与非目标</h2>
+  <ul id="71FUVZFN">
+    <li>目标：定下搜索窗、功能窗、设置窗和插件窗的形态，以及它们的打开关系。</li>
+    <li>目标：把已完成的键盘映射功能放进 Command 体系，并让语言设置只有中文、English、跟随系统三项。</li>
+    <li>非目标：实现代码、插件 API、moe.js 兼容、深色主题、功能默认命令的完整清单。</li>
+    <li>反目标：把所有功能塞回一个窗口里，让用户必须先关掉剪贴板才能看片段。</li>
+  </ul>
+  <h2 id="KU7w2xrg">已定决策</h2>
+  <p id="VY69CnME">入口：纯搜索面板是唯一入口，应用和功能从同一搜索框进入。<b>你的决定。</b></p>
+  <p id="hrZuD82t"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" group="g-shell" /></p>
+  <p id="IkFKhJzA">窗口关系：选中 Command 后由 Command 打开独立功能窗；多个功能窗可以并存。<b>你的决定。</b></p>
+  <p id="NgbisG7_"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" board="w-search" /></p>
+  <p id="chzuScar">搜索结果：按参考图排布——搜索框、分组标题、行尾类型标签、底部 Open Command 与 Actions。<b>你的决定。</b></p>
+  <p id="3Htbt_E3"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" board="list-raycast" /></p>
+  <p id="_T8qVMeT">设置窗：与搜索窗同风格的独立窗口，从搜索窗按 ⌘, 进入；设置项也用搜索布局。语言页只有中文、English、跟随系统。<b>你的决定。</b></p>
+  <p id="L7E6jH1H"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" board="settings-search" /></p>
+  <p id="I1xUPWn-">插件显示：插件命令就是搜索结果里的一条普通 Command，和键盘映射等内置命令用同一行样式；不额外显示插件来源、徽标或分组。<b>你评论里澄清。</b></p>
+  <p id="My_WsMbW">第二轮第 4 组的三块板子都没有采纳；画板上原来的选择只留作历史，不作依据。</p>
+  <p id="BngQW-Od">插件页面：插件命令回车后打开插件自己的独立窗口，与内置功能窗走同一条规则；插件专属设置留在设置页。<b>第三轮你的选择，只保留窗口行为。</b></p>
+  <p id="2uqmR4XB"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" board="plugin-window" />（只取独立窗口行为，不取板子里带插件标记的列表样式）</p>
+  <h2 id="yaVcEt-u">视觉方向</h2>
+  <p id="g-OJlOTt">产品：键盘优先的启动器，用户在任何地方唤起搜索窗，几秒内找到应用或调用功能。</p>
+  <p id="2Umiwnsf">性格：冷静、精确、克制。界面靠表面层级和留白表达状态，不靠彩色装饰。</p>
+  <p id="6UnhbhgD">世界：macOS 命令面板——悬浮浅灰窗口、细分隔线、键帽、应用图标、行尾类型标签。</p>
+  <p id="pJJOn0PD">焦点：搜索结果的选中行，以及功能窗里的快捷键和当前操作结果。</p>
+  <p id="HCtu_jvR">签名细节：行尾统一的 Command / Application / Quicklink 标签，以及底部 Open Command ↵ 与 Actions ⌘K。这是复刻参考图时保留的可识别特征。</p>
+  <h2 id="2ceAOI4S">视觉规则与取值</h2>
+  <p id="gTzi14kZ">以下是画板使用的取值，来源是 <ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" group="g-list" /> 所在的画板样式；实现时把它们收进项目自己的设计 token，不再散落在组件里。</p>
+  <table id="Dyvi8Aha">
+    <tr>
+      <th>
+        <p>用途</p>
+      </th>
+      <th>
+        <p>取值</p>
+      </th>
+      <th>
+        <p>说明</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>主表面</p>
+      </td>
+      <td>
+        <p><code>#ebebeb</code></p>
+      </td>
+      <td>
+        <p>搜索窗、设置窗、功能窗的底色</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>抬升表面</p>
+      </td>
+      <td>
+        <p><code>#f3f3f3</code></p>
+      </td>
+      <td>
+        <p>输入框、卡片、插件页内的块</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>选中行</p>
+      </td>
+      <td>
+        <p><code>#d5d5d5</code></p>
+      </td>
+      <td>
+        <p>搜索结果当前项，不用彩色填充</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>文字</p>
+      </td>
+      <td>
+        <p><code>#1d1d1f</code> / <code>#6e6e73</code> / <code>#9a9aa0</code></p>
+      </td>
+      <td>
+        <p>主文字、次要文字、元信息三个角色</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>分隔线</p>
+      </td>
+      <td>
+        <p><code>rgba(0,0,0,0.09)</code></p>
+      </td>
+      <td>
+        <p>窗口内所有 hairline</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>强调色</p>
+      </td>
+      <td>
+        <p><code>#ff5a5f</code></p>
+      </td>
+      <td>
+        <p>沿用 MyCast 现有强调色，只用于当前键位、选中状态的标记和开关</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>圆角</p>
+      </td>
+      <td>
+        <p>14px 窗口 / 8px 行与按钮 / 5px 键帽</p>
+      </td>
+      <td>
+        <p>嵌套圆角按外圆角减内边距计算</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>字体</p>
+      </td>
+      <td>
+        <p>系统无衬线，中文回退 PingFang SC</p>
+      </td>
+      <td>
+        <p>正文 16px，分组标题 14px，类型标签 14px</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>尺寸</p>
+      </td>
+      <td>
+        <p>搜索与设置窗 1120×688；搜索框 76px；结果行 48px；底栏 60px</p>
+      </td>
+      <td>
+        <p>功能窗按内容定高，宽度约 570px 起</p>
+      </td>
+    </tr>
+  </table>
+  <p id="YDtB8iQ5">
+    <alert type="note">深色主题没有在这次选择里定。我的决定：本稿只按参考图的浅色实现；现有深色适配作为后续工作，不把它混进这次交互讨论。</alert>
+  </p>
+  <h2 id="7JpGoHjc">布局与组件</h2>
+  <ul id="fnvg8aOQ">
+    <li>搜索窗：顶部搜索框，中部按分组排列的结果行，底部操作栏。行内从左到右是图标、名称、副标题、快捷键键帽、类型标签。</li>
+    <li>功能窗与插件窗：顶部标题栏带功能名和快捷键，中部由该功能自己提供内容，多个窗口互不遮挡优先。</li>
+    <li>设置窗：沿用搜索式布局；左侧是可搜索的设置项列表，右侧是当前项详情。语言详情只有三个单选项和一段预览。</li>
+    <li>结果行、键帽、类型标签、分组标题、底栏、开关、单选项各用一套固定高度和字号；同类元素不各写各的。</li>
+  </ul>
+  <h2 id="5X4933aW">留给构建者的部分</h2>
+  <ul id="eSMz87hu">
+    <li>把键盘映射现有内容迁入新视觉语言，保留三栏键盘图和分层编辑行为；只换壳体、间距与配色。</li>
+    <li>功能窗口的创建、隐藏与快捷键注册，按 MyGo 的窗口生命周期实现。</li>
+    <li>默认命令的第一版按示例清单落地：打开键盘映射、剪贴板历史、片段、表情与符号、切换系统外观、打开设置。这是<b>我的决定</b>，你可以改。</li>
+    <li>插件 API 的表面与 moe.js 兼容方案另起设计；本稿只固定用户看到的三处：搜索结果里的插件按普通 Command 行显示、插件独立窗口、设置页插件内容。</li>
+    <li>文案的中文与英文翻译、键盘快捷键冲突处理、窗口位置记忆，由实现阶段决定。</li>
+  </ul>
+  <h2 id="137lIAU1">构建者检查</h2>
+  <p id="LwXE1yh-">我按不了解这段对话的构建者读过这份文档，没有留下会改变计划的问题。你评论纠正了插件显示：插件命令是普通 Command 行，不特殊标注。几处由我替你定的默认选择已在上文标出：深色主题留到后续、默认命令用示例清单、键盘映射保留现有内容只换壳。你批准时可以逐项推翻。</p>
+  <h2 id="dsswStj-">记录过的画板</h2>
+  <p id="qO5dWtV-"><ref artboard="app-shell-navigation" to="S0xX375P6PW7JvrsN5ZFQ" />：三轮画板保存在这里，路径是 <code>.ryugi/artifacts/artboard/app-shell-navigation/</code>，链接见上方引用。第一轮定入口，第二轮定功能窗、结果列表、设置窗；第二轮的插件选项未采纳，第三轮只保留插件独立窗口的行为。</p>
+</doc>
+

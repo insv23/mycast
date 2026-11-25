@@ -1,0 +1,221 @@
+<doc>
+  <h1 id="B_bXlDG0">Raycast 字体规范调查</h1>
+  <p id="3K4klsSb">调查日期：2026-11-21。问题是：MyCast 的 Raycast 式搜索窗到底该用什么字体、字号和字重？当前 600 字重过重，需要按参考图收回来。</p>
+  <h2 id="mfwvpgkM">证据来源</h2>
+  <p id="nQvedjTP">一级证据来自本机 Raycast 应用本身：</p>
+  <ul id="h4terxaU">
+    <li><code>/Applications/Raycast.app/Contents/Info.plist</code> 里 <code>ATSApplicationFontsPath = &quot;.&quot;</code>，说明应用加载随包字体。</li>
+    <li><code>/Applications/Raycast.app/Contents/Resources/</code> 里有 Inter 的 Light、Regular、Medium、SemiBold、Bold 和斜体版本；等宽字体是 JetBrainsMono 和 GeistMono。</li>
+    <li>RaycastWeb bundle 里有 <code>InterVariable.woff2</code> 和 <code>JetBrainsMono.woff2</code>。</li>
+    <li>RaycastWeb 的 <code>css/index.css</code> 把 InterVariable-RN 声明为 <code>font-weight: 400 900</code>，字体栈以 InterVariable 开头，后面是 SF Pro Display 和系统字体。</li>
+    <li>同一段 CSS 开启 <code>&quot;liga&quot; 1, &quot;calt&quot; 1, &quot;kern&quot; 1, &quot;tnum&quot; 1, &quot;ss01&quot; 1, &quot;ss03&quot; 1</code>。</li>
+    <li>参考截图里，结果标题是中等字重；副标题和右侧类型更轻；搜索占位文字大但轻；底部动作也没有到 Semibold 的粗度。</li>
+  </ul>
+  <p id="iiANC3lW">二级证据是第三方对 raycast.com 的测量，只作旁证，可信度低于应用资源：<a href="https://www.shadcn.io/design/raycast">shadcn.io/design/raycast</a>、<a href="https://www.xtractly.app/brands/raycast/fonts">xtractly.app/brands/raycast/fonts</a>。它们测的是网站，不是启动器内部。</p>
+  <p id="h-qRRUcs">字体本身的一级来源：<a href="https://rsms.me/inter/">Inter 官方站</a>、<a href="https://github.com/rsms/inter">Inter 项目</a>、<a href="https://raw.githubusercontent.com/rsms/inter/v4.1/LICENSE.txt">OFL 许可证</a>。官方说明 Inter 是自由开源字体，Web 用法建议开启 <code>liga</code> 和 <code>calt</code>。</p>
+  <h2 id="wBS2nngV">结论</h2>
+  <p id="rWD-rHaa">Raycast 的字体判断是：<b>Inter 为主，JetBrains Mono 为等宽 companion；层级主要靠字号、颜色和 400/500 两档字重，不靠 600/700 的粗体。</b></p>
+  <p id="mXf-XU41">本机应用有 Inter 全套字重和可变字体，但参考截图里的搜索窗不是粗体风格。结果标题用 500 最贴近；副标题、右侧类型、占位文字用 400；分组标题和底部动作用 500。键帽字符用等宽字体的 500，保持键位字符宽度稳定。</p>
+  <p id="0mJKn05U"><code>ss01</code> 和 <code>ss03</code> 是 Raycast 自己 CSS 里开启的 Inter 风格集，属于可复用细节。不需要复制 Raycast 的字体文件，应该从 Inter 官方获取可变字体并附带 OFL 许可证。不要加 <code>-webkit-font-smoothing: antialiased</code>；macOS 上它会把 Inter 渲染得更细。</p>
+  <h2 id="xUR3QDFL">建议 MyCast 采用的字体规范</h2>
+  <p id="LsZHvkrm">字体文件：自托管 Inter Variable 和 JetBrains Mono，从 Inter 官方和 JetBrains Mono 官方获取，附带 OFL 许可证。</p>
+  <codeblock id="I2KWANVm" lang="css">font-family: InterVariable, Inter, &quot;SF Pro Display&quot;, -apple-system,
+  BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+font-feature-settings: &quot;liga&quot; 1, &quot;calt&quot; 1, &quot;kern&quot; 1,
+  &quot;tnum&quot; 1, &quot;ss01&quot; 1, &quot;ss03&quot; 1;</codeblock>
+  <table id="7uCkBv3Z">
+    <tr>
+      <th>
+        <p>Token</p>
+      </th>
+      <th>
+        <p>字体</p>
+      </th>
+      <th>
+        <p>字号</p>
+      </th>
+      <th>
+        <p>字重</p>
+      </th>
+      <th>
+        <p>行高</p>
+      </th>
+      <th>
+        <p>用途</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-search</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>22px</p>
+      </td>
+      <td>
+        <p>400</p>
+      </td>
+      <td>
+        <p>1.2</p>
+      </td>
+      <td>
+        <p>搜索框占位和输入</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-section</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>14px</p>
+      </td>
+      <td>
+        <p>500</p>
+      </td>
+      <td>
+        <p>1.4</p>
+      </td>
+      <td>
+        <p>Suggestions / 命令 分组标题</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-row-title</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>16px</p>
+      </td>
+      <td>
+        <p>500</p>
+      </td>
+      <td>
+        <p>1.4</p>
+      </td>
+      <td>
+        <p>结果主标题</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-row-subtitle</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>14px</p>
+      </td>
+      <td>
+        <p>400</p>
+      </td>
+      <td>
+        <p>1.4</p>
+      </td>
+      <td>
+        <p>来源、说明、副标题</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-row-type</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>14px</p>
+      </td>
+      <td>
+        <p>400</p>
+      </td>
+      <td>
+        <p>1.4</p>
+      </td>
+      <td>
+        <p>Command / Application 类型</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-footer-label</code></p>
+      </td>
+      <td>
+        <p>InterVariable</p>
+      </td>
+      <td>
+        <p>14px</p>
+      </td>
+      <td>
+        <p>500</p>
+      </td>
+      <td>
+        <p>1.4</p>
+      </td>
+      <td>
+        <p>Open Command / Actions</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-keycap</code></p>
+      </td>
+      <td>
+        <p>JetBrains Mono</p>
+      </td>
+      <td>
+        <p>12px</p>
+      </td>
+      <td>
+        <p>500</p>
+      </td>
+      <td>
+        <p>1</p>
+      </td>
+      <td>
+        <p>键帽字符</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>text-code</code></p>
+      </td>
+      <td>
+        <p>JetBrains Mono</p>
+      </td>
+      <td>
+        <p>13px</p>
+      </td>
+      <td>
+        <p>400</p>
+      </td>
+      <td>
+        <p>1.5</p>
+      </td>
+      <td>
+        <p>代码和数值</p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="xJXzv2kt">规则</h2>
+  <ol id="v93i804d">
+    <li>主标题只用 500，不用 600。</li>
+    <li>副标题、类型、占位文字用 400。</li>
+    <li>分组标题和底栏动作标签用 500。</li>
+    <li>键帽用 JetBrains Mono 500；键帽本身保持扁平灰块，无阴影、无高光。</li>
+    <li>不开启 <code>-webkit-font-smoothing: antialiased</code>。</li>
+    <li>字体特性按 Raycast 自家的 CSS 开启 <code>liga / calt / kern / tnum / ss01 / ss03</code>。</li>
+  </ol>
+  <h2 id="RAtf8OyU">置信度与限制</h2>
+  <p id="zpbM_Quj">字体家族、可变字重范围和 OpenType 特性来自本机 Raycast 资源，可信度高。具体原生启动器的点字号和字重没有从二进制中读出直接常量，规范里的数值是结合截图比例和 Raycast Web CSS 推断，可信度中等；最可靠的校准方式是把 400/500 两档应用到搜索窗后，与参考截图并排看。</p>
+  <p id="8iNOTSts">此规范已应用到搜索窗：Inter Variable 与 JetBrains Mono 已自托管在 src/assets/fonts，CSS 已按 400/500 两档字重调整。仓库里的 Markdown 版本在 <code>docs/ryugi/research/2026-11-21-raycast-typography.md</code>。</p>
+</doc>
+

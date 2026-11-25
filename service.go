@@ -40,6 +40,25 @@ type AppInfo struct {
 	Name string `json:"name"`
 }
 
+// Commands answers launcher results for the typed query.
+func (s Service) Commands(query string) []CommandInfo {
+	return s.a.commands.Search(query)
+}
+
+// OpenCommand runs a command and closes the launcher.
+func (s Service) OpenCommand(id string) bool {
+	if !s.a.commands.Open(id) {
+		return false
+	}
+	s.a.hideLauncher()
+	return true
+}
+
+// HideLauncher closes the launcher without quitting the app.
+func (s Service) HideLauncher() {
+	s.a.hideLauncher()
+}
+
 // Service is bound to the page.
 type Service struct{ a *app }
 

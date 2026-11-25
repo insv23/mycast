@@ -22,6 +22,15 @@ export interface AppInfo {
   name: string;
 }
 
+/** CommandInfo is what the launcher needs to draw one result row. */
+export interface CommandInfo {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  shortcut: string;
+}
+
 /** Row is one line of the layer list as the page draws it. */
 export interface Row {
   id: string;
@@ -61,8 +70,12 @@ export const Service = {
   clearOnDoubleTap: bind<[string], void>("Service.ClearOnDoubleTap", (layerID: string) => [layerID]),
   /** ClearOnRelease leaves the gesture unbound. */
   clearOnRelease: bind<[string], void>("Service.ClearOnRelease", (layerID: string) => [layerID]),
+  /** Commands answers launcher results for the typed query. */
+  commands: bind<[string], CommandInfo[]>("Service.Commands", (query: string) => [query]),
   /** DeleteBinding leaves the key empty. */
   deleteBinding: bind<[string, string], void>("Service.DeleteBinding", (layerID: string, key: string) => [layerID, key]),
+  /** HideLauncher closes the launcher without quitting the app. */
+  hideLauncher: bind<[], void>("Service.HideLauncher", () => []),
   /** Icon answers an app's icon as a data URL, or "" when it has none. */
   icon: bind<[string], string>("Service.Icon", (bundleID: string) => [bundleID]),
   /**
@@ -79,6 +92,8 @@ export const Service = {
   moveTo: bind<[string, number], void>("Service.MoveTo", (id: string, to: number) => [id, to]),
   /** Name is the name the system shows for an app. */
   name: bind<[string], string>("Service.Name", (bundleID: string) => [bundleID]),
+  /** OpenCommand runs a command and closes the launcher. */
+  openCommand: bind<[string], boolean>("Service.OpenCommand", (id: string) => [id]),
   /** Reload reads the file again, for an edit made outside the window. */
   reload: bind<[], void>("Service.Reload", () => []),
   /** RemoveItem deletes a layer or a divider, whatever its bindings. */

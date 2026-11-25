@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "threads": [
+    {
+      "id": "uWbINgDEgG",
+      "anchor": {
+        "blockId": "My_WsMbW",
+        "quote": ""
+      },
+      "status": "resolved",
+      "statusAt": "2026-11-21T09:05:08.913Z",
+      "statusBy": "agent",
+      "messages": [
+        {
+          "id": "Az3e3a9mq_",
+          "author": "human",
+          "name": "insv",
+          "avatar": "/api/avatar/gravatar/b1a77966f5f315ec692aa213e65e7301a48eda0cc7d54dd4386391652053c760",
+          "text": "我这里没有选择，对吧？你 4 这个我没有一个看得上的。我认为你的插件在这个搜索窗口显示，它也是和普通的我们这个 EA 这个选项一样，它就是一条呀。",
+          "at": "2026-11-21T09:03:30.064Z"
+        },
+        {
+          "id": "fwICTR6-MN",
+          "author": "agent",
+          "name": "pi",
+          "text": "对，第二轮第 4 组没有被你选；我已把那条记录标成未采纳，只留作历史。文档已改成：插件命令就是搜索结果里的一条普通 Command，和键盘映射等内置命令同一行样式，不加来源、徽标或分组；设置页里每个插件仍有自己的内容；回车打开独立窗口只保留第三轮选定的窗口行为，不保留板子里带插件标记的列表样式。文档和画板 Check 都是 CLEAN。若你说的 EA 指的不是 Command，回我一句我再改。",
+          "at": "2026-11-21T09:05:08.681Z"
+        }
+      ]
+    }
+  ]
+}
